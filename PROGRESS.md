@@ -8,7 +8,7 @@ Verified by eye in kitty 0.48.2 inside tmux 3.7c. `nvim --clean -l test/run.lua`
 
 ## What's next
 
-Top of `PLAN.md`: install from GitHub with lazy.nvim in a clean config.
+Top of `PLAN.md`: README screenshot.
 
 ## Gotchas
 

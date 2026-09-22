@@ -89,6 +89,17 @@ function M.apply()
     pieLegendTextColor = hex(fg), pieSectionTextColor = hex(bg),
   }
   for i, c in ipairs(h) do M.mermaid['pie' .. i] = hex(c) end
+  -- mindmap, timeline and gitGraph cycle through these scales
+  for i = 0, 11 do
+    local c = h[i % #h + 1]
+    M.mermaid['cScale' .. i] = hex(blend(c, bg, 0.3))
+    M.mermaid['cScaleLabel' .. i] = hex(fg)
+    M.mermaid['cScalePeer' .. i] = hex(c)
+    if i < 8 then
+      M.mermaid['git' .. i] = hex(c)
+      M.mermaid['gitBranchLabel' .. i] = hex(bg)
+    end
+  end
   M.signature = vim.json.encode(M.mermaid)
 end
 

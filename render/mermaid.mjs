@@ -12,7 +12,7 @@ const SCALE = 2; // device pixels per CSS px; kitty downsamples, so text stays c
 
 const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox'] });
 const page = await browser.newPage();
-await page.setViewport({ width: 960, height: 800, deviceScaleFactor: SCALE });
+await page.setViewport({ width: 800, height: 800, deviceScaleFactor: SCALE });
 await page.setContent(`<body style="margin:0;background:transparent">
   <div id="c" style="display:inline-block;padding:12px"></div></body>`);
 await page.addScriptTag({ path: fileURLToPath(import.meta.resolve('mermaid/dist/mermaid.min.js')) });
@@ -23,6 +23,9 @@ async function render({ code, out, theme }) {
     mermaid.initialize({
       startOnLoad: false,
       theme: 'base',
+      // gantt fills the viewport width with 11px text; sized up so it survives scaling
+      gantt: { fontSize: 15, sectionFontSize: 15, barHeight: 28, barGap: 6, leftPadding: 90, axisFormat: '%b %d' },
+      themeCSS: '.tick text { font-size: 13px; }',
       themeVariables: { fontFamily: 'Inter, "SF Pro Display", system-ui, "Noto Sans", sans-serif', ...theme },
     });
     const c = document.getElementById('c');
@@ -37,7 +40,7 @@ async function render({ code, out, theme }) {
     } catch (e) {
       c.innerHTML = '';
       document.getElementById('d' + id)?.remove(); // mermaid leaves its error SVG behind
-      return String(e?.message ?? e).split('\n')[0];
+      return String(e?.message ?? e).slice(0, 600);
     }
   }, code, 'm' + n++, theme ?? {});
   if (res) return { out, error: res };

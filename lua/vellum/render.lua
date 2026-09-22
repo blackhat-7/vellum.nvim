@@ -293,10 +293,12 @@ local function code_panel(code, lang, width, label, err)
     until a > #text
   end
   if err then
-    for _, l in ipairs(wrap({ { '✗ ' .. err, { bg, 'VellumError' } } }, inner)) do
-      table.insert(l, 1, { '  ', bg })
-      l[#l + 1] = { string.rep(' ', math.max(0, inner - segs_width(l) + 2) + 2), bg }
-      out[#out + 1] = l
+    for _, text in ipairs(vim.split('✗ ' .. err, '\n')) do
+      for _, l in ipairs(wrap({ { text, { bg, 'VellumError' } } }, inner)) do
+        table.insert(l, 1, { '  ', bg })
+        l[#l + 1] = { string.rep(' ', math.max(0, inner - segs_width(l) + 2) + 2), bg }
+        out[#out + 1] = l
+      end
     end
   end
   out[#out + 1] = { { string.rep(' ', width), bg } }

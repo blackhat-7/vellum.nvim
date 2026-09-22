@@ -18,6 +18,8 @@ local depth = 0 -- list nesting, picks the bullet glyph
 
 function M.reset() cache, used, last_diagram = {}, {}, {} end
 
+local ZWSP = '\226\128\139' -- zero-width space, see M.render
+
 -- Source text of `node`, minus the container prefixes ("> ", list indent)
 -- that tree-sitter marks as block_continuation anywhere inside `from`.
 local function text_of(node, from)
@@ -41,7 +43,7 @@ local function text_of(node, from)
       out[#out + 1] = line:sub(math.max(r == sr and sc or 0, skip[r] or 0) + 1, r == er and ec or #line)
     end
   end
-  return table.concat(out, '\n')
+  return (table.concat(out, '\n'):gsub(ZWSP, ''))
 end
 
 local function child(node, type)
@@ -148,7 +150,10 @@ local function inline(text, hl)
       elseif t == 'hard_line_break' then
         segs[#segs + 1] = { '\n' }
       elseif t == 'html_tag' then
-        if text:sub(cs + 1, ce):match('^<[bB][rR]') then segs[#segs + 1] = { '\n' } end
+        local tag = text:sub(cs + 1, ce)
+        if tag:match('^<[bB][rR]') then segs[#segs + 1] = { '\n' } end
+        local alt = tag:match('^<[iI][mM][gG][^>]-alt="([^"]*)"')
+        if alt then segs[#segs + 1] = { '󰋩 ' .. alt, with(hls, 'VellumMuted') } end
       elseif t == 'shortcut_link' then -- "[x]" without a definition is literal text, "[^x]" a footnote
         local label = text:sub(cs + 1, ce):match('^%[%^([^%]]+)%]$')
         if label then segs[#segs + 1] = { note(label), with(hls, 'VellumLink') } else push(text:sub(cs + 1, ce), hls) end
@@ -300,7 +305,7 @@ local function code_panel(code, lang, width, label, err)
   code = code:gsub('\t', '    ')
   local marks = lang and highlights(code, lang) or {}
   local inner, bg = math.max(1, width - 4), 'VellumCodeBg'
-  label = label or lang or ''
+  label = vim.fn.strcharpart(label or lang or '', 0, math.max(0, width - 4))
   local out = { { { string.rep(' ', math.max(0, width - strwidth(label) - 2)), bg }, { label, 'VellumCodeLabel' }, { '  ', bg } } }
   for r, text in ipairs(vim.split(code, '\n')) do
     local a = 1
@@ -462,13 +467,13 @@ function R.paragraph(node, width)
   local inl = child(node, 'inline')
   local text = inl and text_of(inl, inl) or text_of(node, node)
   if text:match('^%[%^[^%]]+%]:') then return footnotes(text, width) end
-  local path = text:match('^%s*!%[[^%]]*%]%(%s*<?([^%s>)]+)>?[^)]*%)%s*$')
+  local path = text:match('^%s*!%[[^%]]*%]%(%s*<?([^%s>)]+)>?[^)]*%)%s*$') or text:match('^%s*<[iI][mM][gG][^>]-src="([^"]+)"[^>]*>%s*$')
   return path and picture_of(path, width) or wrap(inline(text), width)
 end
 
 function R.fenced_code_block(node, width)
   local info = child(node, 'info_string')
-  local lang = info and text_of(info):match('^%s*([^%s{]+)')
+  local lang = info and text_of(info):match('^%s*([%w_+#.-]+)') -- "json,title=x" and "{r}" carry more than a language
   local body = child(node, 'code_fence_content')
   local code = body and text_of(body, node) or ''
   if lang and lang:lower() == 'mermaid' and image.supported then return diagram(code, width, (node:start())) end
@@ -674,7 +679,22 @@ function M.render(buf, win_width, max_width)
   local width = math.max(20, math.min(win_width - 4, max_width))
   local margin = string.rep(' ', math.max(0, math.floor((win_width - width) / 2)))
   depth = 0
-  local body, anchors = blocks(kids(ts.get_parser(buf, 'markdown'):parse()[1]:root()), width, 0)
+  local root = ts.get_parser(buf, 'markdown'):parse()[1]:root()
+  if root:has_error() then
+    -- tree-sitter-markdown gives up on a table row whose cells are all empty
+    -- ("|  |  |") and drops the rest of the table; GitHub renders it. Give
+    -- those cells an invisible character (text_of strips it) and parse that.
+    local fixed = false
+    for i, l in ipairs(src) do
+      local body, tail = l:match('^([%s>]*|[%s|]*)(|%s*)$')
+      if body then
+        src[i] = body:gsub('|(%s*)', '|%1' .. ZWSP) .. tail
+        fixed = true
+      end
+    end
+    if fixed then root = ts.get_string_parser(table.concat(src, '\n'), 'markdown'):parse()[1]:root() end
+  end
+  local body, anchors = blocks(kids(root), width, 0)
   cache, used = used, {}
   local text, rows = { '' }, { {} } -- a blank first line for breathing room
   for i, line in ipairs(body) do

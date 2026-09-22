@@ -1,5 +1,5 @@
--- Bridge to render/mermaid.mjs: one long-lived browser process, PNGs cached
--- on disk by content hash, so a diagram is rendered once, ever.
+-- Bridge to render/browser.mjs: one long-lived headless browser turns mermaid
+-- diagrams and non-PNG images into PNGs, cached on disk by content hash.
 local image = require('vellum.image')
 
 local M = {}
@@ -14,7 +14,7 @@ local function start()
   if not vim.uv.fs_stat(root .. '/node_modules') then return 'renderer not built: run :Lazy build vellum.nvim' end
   vim.fn.mkdir(dir, 'p')
   local partial, stderr = '', ''
-  local ok, proc = pcall(vim.system, { 'node', root .. '/mermaid.mjs' }, {
+  local ok, proc = pcall(vim.system, { 'node', root .. '/browser.mjs' }, {
     stdin = true,
     stdout = function(_, data)
       partial = partial .. (data or '')
@@ -43,10 +43,9 @@ local function start()
   job = proc
 end
 
--- State of the diagram `code` in the current theme:
--- 'ready', path, {w, h} | 'error', message | 'pending'.
-function M.get(code, theme)
-  local out = dir .. '/' .. vim.fn.sha256(theme.signature .. code):sub(1, 32) .. '.png'
+-- 'ready', path, { w, h } | 'error', message | 'pending'
+local function request(key, payload)
+  local out = dir .. '/' .. vim.fn.sha256(key):sub(1, 32) .. '.png'
   if errors[out] then return 'error', errors[out] end
   if not sizes[out] then
     local w, h = image.png_size(out)
@@ -59,13 +58,19 @@ function M.get(code, theme)
       if err then return 'error', err end
     end
     pending[out] = true
-    job:write(vim.json.encode({ code = code, out = out, theme = theme.mermaid }) .. '\n')
+    payload.out = out
+    job:write(vim.json.encode(payload) .. '\n')
   end
   return 'pending'
 end
 
-function M.stop()
-  if job then job:write(nil) end -- closing stdin lets the browser shut down cleanly
+function M.diagram(code, theme)
+  return request(theme.signature .. code, { code = code, theme = theme.mermaid })
+end
+
+-- `src` is a local path or an http(s) URL; `version` changes when it should re-render.
+function M.image(src, version)
+  return request(src .. '\0' .. version, { image = src })
 end
 
 return M

@@ -3,7 +3,7 @@
 -- list of groups (merged, later wins); marks are extra { start, end, group }
 -- byte ranges inside the segment (syntax highlighting in code blocks).
 local image = require('vellum.image')
-local mermaid = require('vellum.mermaid')
+local browser = require('vellum.browser')
 local theme = require('vellum.theme')
 
 local ts = vim.treesitter
@@ -248,12 +248,27 @@ local function picture(file, pw, ph, width, density)
   return out
 end
 
--- Lines for a local PNG, or nil when it cannot be shown as an image.
-local function local_png(path, width)
-  if not image.supported or path:match('^%a[%w+.-]*:') or not path:lower():match('%.png$') then return nil end
-  local file = vim.fs.normalize(path:sub(1, 1) == '/' and path or dir .. '/' .. path)
-  local pw, ph = image.png_size(file)
-  return pw and picture(file, pw, ph, width, 1) or nil
+-- Lines showing image `src` (local path or http(s) URL), or nil to fall back
+-- to its alt text. PNGs go straight to the terminal; other formats and remote
+-- images go through the browser.
+local function picture_of(src, width)
+  if not image.supported then return nil end
+  local remote, version = src:match('^https?://'), os.date('%F') -- remote images refresh daily
+  if not remote then
+    if src:match('^%a[%w+.-]*:') then return nil end
+    src = vim.fs.normalize(src:sub(1, 1) == '/' and src or dir .. '/' .. src)
+    local stat = vim.uv.fs_stat(src)
+    if not stat or stat.type ~= 'file' then return nil end
+    if src:lower():match('%.png$') then
+      local pw, ph = image.png_size(src)
+      return pw and picture(src, pw, ph, width, 1)
+    end
+    version = stat.mtime.sec .. '.' .. stat.size
+  end
+  local state, file, size = browser.image(src, version)
+  if state == 'ready' then return picture(file, size[1], size[2], width, 2) end
+  if state == 'pending' then volatile = volatile + 1 end
+  return nil
 end
 
 -- Syntax highlight ranges per 0-based row: { { start, end, group }, ... }.
@@ -317,7 +332,7 @@ local function code_panel(code, lang, width, label, err)
 end
 
 local function diagram(code, width, row)
-  local state, a, b = mermaid.get(code, theme)
+  local state, a, b = browser.diagram(code, theme)
   if state == 'ready' then
     last_diagram[row] = picture(a, b[1], b[2], width, 2)
     return last_diagram[row]
@@ -444,7 +459,7 @@ function R.paragraph(node, width)
   local text = inl and text_of(inl, inl) or text_of(node, node)
   if text:match('^%[%^[^%]]+%]:') then return footnotes(text, width) end
   local path = text:match('^%s*!%[[^%]]*%]%(%s*<?([^%s>)]+)>?[^)]*%)%s*$')
-  return path and local_png(path, width) or wrap(inline(text), width)
+  return path and picture_of(path, width) or wrap(inline(text), width)
 end
 
 function R.fenced_code_block(node, width)
@@ -616,7 +631,7 @@ function R.html_block(node, width)
   local text = text_of(node, node)
   if text:match('^%s*<!%-%-') then return {} end
   local img = text:match('<img[^>]-src="([^"]+)"')
-  local shown = img and local_png(img, width)
+  local shown = img and picture_of(img, width)
   if shown then return shown end
   text = vim.trim((text:gsub('<[^>]*>', '')))
   return text == '' and {} or wrap(inline(text), width)

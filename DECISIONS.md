@@ -10,4 +10,5 @@ Why things are the way they are. Append only. One entry, one to three lines.
 - **Requires Neovim 0.12.** (2026-09-22) `nvim_ui_send` is the clean way to send graphics escapes from the server; no compatibility layer for older versions.
 - **Diagram size targets terminal text size.** (2026-09-22) Scale = cell height / 24 per CSS px, so 16px diagram text lands near the terminal font. Capped at the content width.
 - **Highlights go through a decoration provider, not stored extmarks.** (2026-09-22) Setting 15k extmarks per keystroke cost 9.6 ms on a 5,000-line doc; ephemeral marks on drawn lines cost nothing. Flattened lines are memoized on the cached line tables (`line.flat`).
+- **Remote images are fetched by the headless browser and re-fetched daily.** (2026-09-23) GitHub shows them too; badges and screenshots are common in READMEs. The cache key is URL + date; local files key on mtime + size.
 - **Gantt defaults differ from GitHub: `axisFormat: '%b %d'`, 15px labels.** (2026-09-22) Gantt fills the 800px viewport, then scales down to the pane; GitHub's full dates overlapped. A diagram's own `axisFormat` still wins.

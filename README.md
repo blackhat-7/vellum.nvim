@@ -12,7 +12,7 @@ A live markdown preview that renders beside your buffer, inside the terminal. Gi
 ## Requirements
 
 - Neovim ≥ 0.12 with `termguicolors`
-- Node.js ≥ 20 (only for mermaid diagrams)
+- Node.js ≥ 20 (for mermaid diagrams and non-PNG images)
 - For images: [kitty](https://sw.kovidgoyal.net/kitty/) or [Ghostty](https://ghostty.org). In tmux, add `set -g allow-passthrough on`.
 - A [Nerd Font](https://www.nerdfonts.com) for the alert and checkbox icons
 
@@ -55,7 +55,7 @@ require('vellum').setup({
 | Fenced code | tree-sitter syntax colors, language label |
 | ` ```mermaid ` | image (text fallback outside kitty/Ghostty) |
 | Footnotes | superscript refs, muted notes |
-| Local PNG images | image |
+| Images: PNG, JPG, GIF, WebP, SVG, local or http(s) | image (alt text elsewhere) |
 | Front matter, HTML blocks | shown as YAML / text; comments hidden |
 
 ## License

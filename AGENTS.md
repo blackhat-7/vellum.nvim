@@ -11,7 +11,7 @@ A Neovim plugin: `:Vellum` opens a live, beautifully rendered GitHub-markdown pr
 - `lua/vellum/init.lua` — preview window, autocmds, scroll sync.
 - `lua/vellum/theme.lua` — palette derived from the active colorscheme.
 - `lua/vellum/image.lua` — kitty graphics via Unicode placeholders (works through tmux).
-- `lua/vellum/mermaid.lua` + `render/mermaid.mjs` — one long-lived headless Chrome renders diagrams to cached PNGs.
+- `lua/vellum/browser.lua` + `render/browser.mjs` — one long-lived headless Chrome turns diagrams and non-PNG images into cached PNGs.
 - `build.lua` — lazy.nvim runs it on install: `npm ci` + headless shell download.
 
 Lua for Neovim ≥ 0.12. Node ≥ 20 for the renderer only.

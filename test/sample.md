@@ -51,6 +51,14 @@ flowchart LR
 <!-- hidden comment -->
 <p align="center">centered html</p>
 
+## Images
+
+![gradient](images/grad.jpg)
+
+![logo](images/logo.svg)
+
+![badge](https://img.shields.io/badge/vellum-nvim-blue.svg)
+
 ### Level 3
 #### Level 4
 ##### Level 5

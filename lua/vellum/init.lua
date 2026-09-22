@@ -3,7 +3,7 @@
 local render = require('vellum.render')
 local theme = require('vellum.theme')
 local image = require('vellum.image')
-local mermaid = require('vellum.mermaid')
+local browser = require('vellum.browser')
 
 local api = vim.api
 local M = {}
@@ -66,7 +66,7 @@ local function update()
     draw()
   end)
 end
-mermaid.on_update = update
+browser.on_update = update
 M.redraw = draw
 
 function M.setup(opts) M.config = vim.tbl_extend('force', M.config, opts or {}) end

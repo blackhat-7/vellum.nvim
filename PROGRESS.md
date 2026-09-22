@@ -17,6 +17,7 @@ Verified by eye in kitty 0.48.2 inside tmux 3.7c. `nvim --clean -l test/run.lua`
 - **`node:start()` returns three values.** As a last call argument they spill into later parameters; wrap in parens.
 - **The inline parser has anonymous punctuation children** (`/`, `:`). Walk only named nodes, or text reaches `push` in fragments.
 - **npm may block puppeteer's postinstall** (`allowScripts`), so `build.lua` downloads the headless shell explicitly.
-- **tmux needs `set -g allow-passthrough on`** for kitty graphics.
+- **tmux needs `set -g allow-passthrough on`** for kitty graphics, and RGB in `terminal-features` for the attached TERM. Over ssh, `COLORTERM` is not forwarded, so tmux does not guess RGB.
+- **Screenshot harness can mimic ssh:** kitty `-o term=xterm-256color` and `env -u COLORTERM` before tmux.
 - **Kitty placeholders need `termguicolors`**: the image id is the fg color.
 - **Screenshot checks:** a headless Hyprland output (`hyprctl output create headless`) plus `grim -o` captures kitty without covering the real screen. Launch kitty with `-o confirm_os_window_close=0`.

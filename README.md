@@ -13,7 +13,11 @@ A live markdown preview that renders beside your buffer, inside the terminal. Gi
 
 - Neovim ≥ 0.12 with `termguicolors`
 - Node.js ≥ 20 (for mermaid diagrams and non-PNG images)
-- For images: [kitty](https://sw.kovidgoyal.net/kitty/) or [Ghostty](https://ghostty.org). In tmux, add `set -g allow-passthrough on`.
+- For images: [kitty](https://sw.kovidgoyal.net/kitty/) or [Ghostty](https://ghostty.org). Works over ssh. In tmux, add:
+  ```tmux
+  set -g allow-passthrough on
+  set -as terminal-features ',xterm-256color:RGB'   # your outer $TERM; ssh drops COLORTERM
+  ```
 - A [Nerd Font](https://www.nerdfonts.com) for the alert and checkbox icons
 
 ## Install

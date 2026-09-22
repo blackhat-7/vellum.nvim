@@ -35,9 +35,29 @@ local DIACRITICS = {
 local PLACEHOLDER = vim.fn.nr2char(0x10EEEE)
 M.max_rows = #DIACRITICS
 
-local term = (vim.env.TERM or '') .. (vim.env.TERM_PROGRAM or '')
-M.supported = vim.api.nvim_ui_send ~= nil
-  and (vim.env.KITTY_WINDOW_ID or vim.env.GHOSTTY_RESOURCES_DIR or term:find('kitty') or term:find('ghostty')) ~= nil
+-- Which terminal draws the images, and whether it can. Inside tmux (often
+-- over ssh, where env vars lie) tmux reports the attached terminal. tmux also
+-- downgrades 24-bit color unless told the terminal has it, and a placeholder's
+-- color *is* its image id, so without RGB images would silently vanish.
+local function detect()
+  local env = (vim.env.TERM or '') .. (vim.env.TERM_PROGRAM or '')
+  local local_term = vim.env.KITTY_WINDOW_ID or vim.env.GHOSTTY_RESOURCES_DIR or env:find('kitty') or env:find('ghostty')
+  local client = ''
+  if vim.env.TMUX then
+    local ok, r = pcall(function()
+      return vim.system({ 'tmux', 'display', '-p', '#{client_termtype}\t#{client_termfeatures}\t#{client_termname}' }, { text = true }):wait()
+    end)
+    client = ok and r.code == 0 and r.stdout or ''
+  end
+  local kind, features, name = unpack(vim.split(vim.trim(client), '\t'))
+  M.supported = vim.api.nvim_ui_send ~= nil
+    and (local_term or (kind or ''):lower():find('kitty') or (kind or ''):lower():find('ghostty')) ~= nil
+  M.problem = nil
+  if M.supported and vim.env.TMUX and features and not features:find('RGB') then
+    M.problem = ("tmux isn't passing 24-bit color, so images can't show. Add to tmux.conf:\nset -as terminal-features ',%s:RGB'\nthen detach and re-attach."):format(name or 'xterm-256color')
+  end
+end
+detect()
 
 local sent = {}
 local ffi = require('ffi')
@@ -49,8 +69,26 @@ local function send(seq)
   vim.api.nvim_ui_send(seq)
 end
 
--- Forget what was sent, e.g. after tmux re-attaches to a new terminal.
-function M.reset() sent = {} end
+-- Forget what was sent and look at the terminal again, e.g. after tmux
+-- re-attaches from another terminal.
+function M.reset()
+  sent = {}
+  detect()
+end
+
+-- Send the PNG bytes themselves, not a path: over ssh the terminal is on
+-- another machine and cannot read our files.
+local function transmit(id, cols, rows, path)
+  local f = io.open(path, 'rb')
+  if not f then return end
+  local data = vim.base64.encode(f:read('*a'))
+  f:close()
+  for i = 1, #data, 4096 do
+    local more = i + 4096 <= #data and 1 or 0
+    local keys = i == 1 and ('a=T,f=100,U=1,q=2,i=%d,c=%d,r=%d,m=%d'):format(id, cols, rows, more) or 'm=' .. more
+    send('\27_G' .. keys .. ';' .. data:sub(i, i + 4095) .. '\27\\')
+  end
+end
 
 -- Pixel size of one terminal cell.
 function M.cell()
@@ -84,7 +122,7 @@ function M.lines(path, cols, rows)
   vim.api.nvim_set_hl(0, hl, { fg = id })
   if not sent[id] then
     sent[id] = true
-    send(('\27_Ga=T,t=f,f=100,U=1,q=2,i=%d,c=%d,r=%d;%s\27\\'):format(id, cols, rows, vim.base64.encode(path)))
+    transmit(id, cols, rows, path)
   end
   local out = {}
   local rest = PLACEHOLDER:rep(cols - 1)

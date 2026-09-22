@@ -252,7 +252,7 @@ end
 -- to its alt text. PNGs go straight to the terminal; other formats and remote
 -- images go through the browser.
 local function picture_of(src, width)
-  if not image.supported then return nil end
+  if not image.supported or image.problem then return nil end
   local remote, version = src:match('^https?://'), os.date('%F') -- remote images refresh daily
   if not remote then
     if src:match('^%a[%w+.-]*:') then return nil end
@@ -332,6 +332,7 @@ local function code_panel(code, lang, width, label, err)
 end
 
 local function diagram(code, width, row)
+  if image.problem then return code_panel(code, 'mermaid', width, nil, image.problem) end
   local state, a, b = browser.diagram(code, theme)
   if state == 'ready' then
     last_diagram[row] = picture(a, b[1], b[2], width, 2)

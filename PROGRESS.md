@@ -24,3 +24,4 @@ Verified by eye in kitty inside tmux. `nvim --clean -l test/run.lua`: 73 checks 
 - **Kitty placeholders need `termguicolors`**: the image id is the fg color.
 - **Screenshot checks:** a headless Hyprland output (`hyprctl output create headless`) plus `grim -o` captures kitty without covering the real screen. Launch kitty with `-o confirm_os_window_close=0`.
 - **`vim.fn.tempname()` + `XDG_CACHE_HOME`:** `test/run.lua` sets a private cache before requiring the plugin, because `browser.lua` prunes the cache on load.
+- **README shots come from `docs/demo.md`.** Launch kitty with `-o background_image=none -o background_opacity=1` (transparent schemes show the wallpaper). The compositor pointer lands on the headless output; patch it out.

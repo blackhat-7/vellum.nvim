@@ -16,3 +16,4 @@ Each line carries its own done-check.
 - [x] `<details>`/`<summary>`: summary shows as "▾ summary", body renders as normal markdown. Done: test + sample.
 - [x] Start the renderer when `:Vellum` opens. First diagram 840 → 220 ms (headless, 1.5 s after open).
 - [x] Cap the PNG cache (`stdpath('cache')/vellum`) at 100 MB, least recently used out first. Done: test fills a temp cache past the cap.
+- [x] README showcase: `docs/hero.png`, `docs/light.png`, `docs/carbonfox.png`, shot from `docs/demo.md` in kitty at font size 14, framed with ImageMagick.

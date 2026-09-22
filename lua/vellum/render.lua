@@ -114,7 +114,8 @@ local function inline(text, hl)
     if i <= #s then segs[#segs + 1] = { s:sub(i), hls } end
   end
   local function span(n) return select(3, n:start()), select(3, n:end_()) end
-  local function walk(node, hls)
+  -- `literal`: this node's delimiters are text, not markup
+  local function walk(node, hls, literal)
     local pos, stop = span(node)
     -- anonymous children are punctuation ("/", ":"); they stay in the text runs
     for c in node:iter_children() do
@@ -123,7 +124,13 @@ local function inline(text, hl)
       push(text:sub(pos + 1, cs), hls)
       pos = ce
       local t = c:type()
-      if t == 'emphasis' then
+      -- an "_" touching a letter or digit outside never opens or closes
+      -- emphasis (CommonMark); tree-sitter still pairs "Question_1 … Answer_1"
+      local intraword = (t == 'emphasis' or t == 'strong_emphasis') and text:sub(cs + 1, cs + 1) == '_'
+        and (text:sub(cs, cs):match('%w') or text:sub(ce + 1, ce + 1):match('%w'))
+      if intraword then
+        walk(c, hls, true)
+      elseif t == 'emphasis' then
         walk(c, with(hls, 'VellumItalic'))
       elseif t == 'strong_emphasis' then
         walk(c, with(hls, 'VellumBold'))
@@ -159,6 +166,8 @@ local function inline(text, hl)
         if label then segs[#segs + 1] = { note(label), with(hls, 'VellumLink') } else push(text:sub(cs + 1, ce), hls) end
       elseif not t:match('delimiter$') then
         walk(c, hls)
+      elseif literal then
+        push(text:sub(cs + 1, ce), hls)
       end
       ::continue::
     end
@@ -652,7 +661,7 @@ function R.html_block(node, width)
   if shown then return shown end
   -- an image that cannot be shown keeps its alt text, as markdown images do
   text = text:gsub('<img[^>]-alt="([^"]*)"[^>]*>', '󰋩 %1')
-  text = vim.trim((text:gsub('<[^>]*>', '')))
+  text = vim.trim((text:gsub('</?%a[^>]*>', ''))) -- tags only: "<40 words" is text
   return text == '' and {} or wrap(inline(text), width)
 end
 
@@ -681,15 +690,22 @@ function M.render(buf, win_width, max_width)
   depth = 0
   local root = ts.get_parser(buf, 'markdown'):parse()[1]:root()
   if root:has_error() then
-    -- tree-sitter-markdown gives up on a table row whose cells are all empty
-    -- ("|  |  |") and drops the rest of the table; GitHub renders it. Give
-    -- those cells an invisible character (text_of strips it) and parse that.
+    -- tree-sitter-markdown gives up on table rows with an empty cell written
+    -- "||", or with every cell empty ("|  |  |"), dropping rows GitHub shows.
+    -- Outside code, space out "||" and give all-empty cells an invisible
+    -- character (text_of strips it), then parse that.
     local fixed = false
     for i, l in ipairs(src) do
-      local body, tail = l:match('^([%s>]*|[%s|]*)(|%s*)$')
-      if body then
-        src[i] = body:gsub('|(%s*)', '|%1' .. ZWSP) .. tail
-        fixed = true
+      local node = l:match('^[%s>]*|') and root:named_descendant_for_range(i - 1, 0, i - 1, 0)
+      if node and not node:type():match('code') then
+        local was = l
+        repeat
+          local prev = l
+          l = l:gsub('||', '| |')
+        until l == prev
+        local body, tail = l:match('^([%s>]*|[%s|]*)(|%s*)$')
+        if body then l = body:gsub('|(%s*)', '|%1' .. ZWSP) .. tail end
+        if l ~= was then src[i], fixed = l, true end
       end
     end
     if fixed then root = ts.get_string_parser(table.concat(src, '\n'), 'markdown'):parse()[1]:root() end

@@ -123,6 +123,8 @@ do
   check('long info string', find(lines, 'json') and not find(lines, 'title'), vim.inspect(lines))
   lines = doc('| a | b |\n|---|---|\n| x | 1 |\n|  |  |\n| y | 2 |\n\n```\n|  |  |\n```', 60)
   check('table survives an all-empty row', find(lines, '│ y +│ 2 │') and not find(lines, '| y'), vim.inspect(lines))
+  lines = doc('| A | B | C |\n|---|---|---|\n| **Misc** |||\n| x | y | z |\n\n```\n|| keep ||\n```', 60)
+  check('row with || cells', find(lines, '│ Misc │') and find(lines, '|| keep ||'), vim.inspect(lines))
   check('no zero-width space leaks', not table.concat(lines):find('\226\128\139'))
   check('inline html img alt', find(doc('<img src="nope.png" width="4"\n  alt="Sample receipt">\n\nText <img alt="icon" src="i.png"> here.'), '󰋩 Sample receipt'))
   check('inline img in text', find(doc('Text <img alt="icon" src="i.png"> here.'), 'Text 󰋩 icon here'))
@@ -169,6 +171,9 @@ do
   check('heading color', style('## Head', 'Head'):find('H2'), style('## Head', 'Head'))
   check('syntax', style('```lua\nlocal v = 1\n```', 'local'):find('@keyword'), style('```lua\nlocal v = 1\n```', 'local'))
   check('table head', style('| h |\n|---|\n| c |', 'h'):find('TableHead'), style('| h |\n|---|\n| c |', 'h'))
+  check('html block keeps a bare <', find(doc('<recap>\nRecap: <40 words, 1-2 sentences.\n</recap>'), 'Recap: <40 words, 1%-2 sentences%.'))
+  check('intraword underscores are literal', find(doc('Question_1: hello\nResponse_1: world'), 'Question_1: hello Response_1: world'))
+  check('real underscore emphasis', style('an _ital_ word', 'ital'):find('Italic'), style('an _ital_ word', 'ital'))
   check('alert color', style('> [!TIP]\n> x', 'Tip'):find('Tip'), style('> [!TIP]\n> x', 'Tip'))
 end
 

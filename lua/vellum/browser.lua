@@ -10,6 +10,26 @@ local job, pending, errors, sizes = nil, {}, {}, {}
 
 M.on_update = function() end
 
+-- Keep the cache under 100 MB, least recently used out first. Runs once per
+-- session, before any file is shown; request() bumps the mtime of files it uses.
+local function prune()
+  local files, total = {}, 0
+  for name in vim.fs.dir(dir) do
+    local st = vim.uv.fs_stat(dir .. '/' .. name)
+    if st and st.type == 'file' then
+      files[#files + 1] = { dir .. '/' .. name, st.mtime.sec, st.size }
+      total = total + st.size
+    end
+  end
+  table.sort(files, function(a, b) return a[2] < b[2] end)
+  for _, f in ipairs(files) do
+    if total <= 100 * 1024 * 1024 then break end
+    os.remove(f[1])
+    total = total - f[3]
+  end
+end
+prune()
+
 -- Start the renderer, if it is not running. Loading Chrome and mermaid takes
 -- ~0.7 s, so the preview starts it on open rather than on the first diagram.
 -- Returns an error message, or nil.
@@ -53,7 +73,10 @@ local function request(key, payload)
   if errors[out] then return 'error', errors[out] end
   if not sizes[out] then
     local w, h = image.png_size(out)
-    if w then sizes[out] = { w, h } end
+    if w then
+      sizes[out] = { w, h }
+      vim.uv.fs_utime(out, os.time(), os.time())
+    end
   end
   if sizes[out] then return 'ready', out, sizes[out] end
   if not pending[out] then

@@ -15,4 +15,4 @@ Each line carries its own done-check.
 - [x] Inline images inside text (badge rows): small ones sit in the line, big ones break out as block pictures. Done: badge row in `test/sample.md` renders as images in kitty.
 - [x] `<details>`/`<summary>`: summary shows as "▾ summary", body renders as normal markdown. Done: test + sample.
 - [x] Start the renderer when `:Vellum` opens. First diagram 840 → 220 ms (headless, 1.5 s after open).
-- [ ] Cap the PNG cache (`stdpath('cache')/vellum`) at 100 MB, least recently used out first. Done: test fills a temp cache past the cap.
+- [x] Cap the PNG cache (`stdpath('cache')/vellum`) at 100 MB, least recently used out first. Done: test fills a temp cache past the cap.

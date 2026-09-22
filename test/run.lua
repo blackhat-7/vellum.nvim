@@ -1,5 +1,19 @@
 -- Assertion tests. Run: nvim --clean -l test/run.lua
 vim.opt.rtp:prepend(vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h'))
+
+-- a private cache, filled past the 100 MB cap with sparse files of age 1..3,
+-- before the plugin loads and prunes it
+vim.env.XDG_CACHE_HOME = vim.fn.tempname()
+local cache = vim.fn.stdpath('cache') .. '/vellum'
+vim.fn.mkdir(cache, 'p')
+for age = 1, 3 do
+  local f = io.open(cache .. '/' .. age .. '.png', 'wb')
+  f:seek('set', 60 * 1024 * 1024 - 1)
+  f:write('x')
+  f:close()
+  vim.uv.fs_utime(cache .. '/' .. age .. '.png', os.time() - age * 60, os.time() - age * 60)
+end
+
 local render = require('vellum.render')
 local image = require('vellum.image')
 require('vellum.theme').apply()
@@ -39,6 +53,9 @@ for _, w in ipairs({ 24, 40, 57, 80, 84, 121, 200 }) do
     if sw > w and not l:find('[│╭╰├]') then check('width ' .. w, false, ('line %d is %d wide: %s'):format(i, sw, l)) break end
   end
 end
+
+-- the cache kept only what fits in 100 MB, newest first
+check('cache pruned', vim.uv.fs_stat(cache .. '/1.png') and not vim.uv.fs_stat(cache .. '/2.png') and not vim.uv.fs_stat(cache .. '/3.png'))
 
 -- a cached re-render equals a fresh one
 do

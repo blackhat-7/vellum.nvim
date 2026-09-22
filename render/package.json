@@ -1,0 +1,9 @@
+{
+  "name": "vellum-render",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "mermaid": "^12.0.0",
+    "puppeteer": "^25.11.0"
+  }
+}

@@ -18,8 +18,8 @@ local function doc(text, width)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(text, '\n'))
   render.reset()
-  local lines, marks, anchors = render.render(buf, width or 84, 100)
-  return lines, marks, anchors, buf
+  local lines, rows, _, anchors = render.render(buf, width or 84, 100)
+  return lines, rows, anchors, buf
 end
 
 local function find(lines, pat)
@@ -46,6 +46,9 @@ do
   render.reset()
   local a, am = render.render(buf, 84, 100)
   local b, bm = render.render(buf, 84, 100)
+  render.reset()
+  local c, cm = render.render(buf, 84, 100)
+  check('fresh equals cached', vim.deep_equal(a, c) and vim.deep_equal(am, cm))
   check('cache lines', vim.deep_equal(a, b))
   check('cache marks', vim.deep_equal(am, bm))
 end

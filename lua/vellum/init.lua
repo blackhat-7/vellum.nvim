@@ -12,7 +12,20 @@ M.config = { max_width = 100 }
 
 local ns = api.nvim_create_namespace('vellum')
 local group = api.nvim_create_augroup('vellum', { clear = true })
-local S = {} -- win, buf: the preview · src: the markdown buffer · anchors: scroll map
+local S = {} -- win, buf: the preview · src: the markdown buffer · rows, margin: highlights · anchors: scroll map
+
+-- Highlights are applied only to lines being drawn, so a redraw costs the
+-- same for a 50-line and a 5,000-line document.
+api.nvim_set_decoration_provider(ns, {
+  on_win = function(_, _, buf) return buf == S.buf end,
+  on_line = function(_, _, buf, row)
+    for _, m in ipairs(S.rows[row + 1] or {}) do
+      api.nvim_buf_set_extmark(buf, ns, row, m[1] + S.margin, {
+        end_col = m[2] + S.margin, hl_group = m[3], priority = m[4], ephemeral = true,
+      })
+    end
+  end,
+})
 
 local function valid()
   return S.win and api.nvim_win_is_valid(S.win) and S.src and api.nvim_buf_is_valid(S.src)
@@ -35,15 +48,11 @@ end
 
 local function draw()
   if not valid() then return end
-  local lines, marks, anchors = render.render(S.src, api.nvim_win_get_width(S.win), M.config.max_width)
+  local lines
+  lines, S.rows, S.margin, S.anchors = render.render(S.src, api.nvim_win_get_width(S.win), M.config.max_width)
   vim.bo[S.buf].modifiable = true
   api.nvim_buf_set_lines(S.buf, 0, -1, false, lines)
   vim.bo[S.buf].modifiable = false
-  api.nvim_buf_clear_namespace(S.buf, ns, 0, -1)
-  for _, m in ipairs(marks) do
-    api.nvim_buf_set_extmark(S.buf, ns, m[1], m[2], { end_col = m[3], hl_group = m[4], priority = m[5] })
-  end
-  S.anchors = anchors
   sync()
 end
 
@@ -58,12 +67,13 @@ local function update()
   end)
 end
 mermaid.on_update = update
+M.redraw = draw
 
 function M.setup(opts) M.config = vim.tbl_extend('force', M.config, opts or {}) end
 
 function M.open()
   if valid() then return end
-  S = { src = api.nvim_get_current_buf(), buf = api.nvim_create_buf(false, true), anchors = {} }
+  S = { src = api.nvim_get_current_buf(), buf = api.nvim_create_buf(false, true), anchors = {}, rows = {}, margin = 0 }
   vim.bo[S.buf].bufhidden = 'wipe'
   api.nvim_buf_set_name(S.buf, 'vellum://preview')
   S.win = api.nvim_open_win(S.buf, false, { split = 'right', win = api.nvim_get_current_win() })

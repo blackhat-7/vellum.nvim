@@ -19,7 +19,8 @@ Lua for Neovim ≥ 0.12. Node ≥ 20 for the renderer only.
 ## Commands
 
 ```sh
-nvim -l test/run.lua                                   # assertion tests, headless
+nvim --clean -l test/run.lua                           # assertion tests, headless
+nvim --clean -l test/perf.lua                          # keystroke cost on 5,000 lines
 nvim --clean --headless -c 'luafile test/dump.lua' -c 'qa!'   # print the rendered sample
 nvim --clean -u test/init.lua test/sample.md -c Vellum # try it by hand
 (cd render && npm ci && npx puppeteer browsers install chrome-headless-shell)  # build renderer
@@ -27,10 +28,10 @@ nvim --clean -u test/init.lua test/sample.md -c Vellum # try it by hand
 
 ## Session routine
 
-1. **Orient.** Read the four files. Run `git log --oneline -5`, then `nvim -l test/run.lua`. Confirm reality matches `PROGRESS.md`. Say so if it does not.
+1. **Orient.** Read the four files. Run `git log --oneline -5`, then `nvim --clean -l test/run.lua`. Confirm reality matches `PROGRESS.md`. Say so if it does not.
 2. **Pick one task** — the top unchecked line in `PLAN.md`. Mark it `[~]`.
 3. **Do only that task.** Read the code before changing it.
-4. **Verify** with the task's own done-check plus `nvim -l test/run.lua`. Visual changes need a look in a real kitty (+ tmux).
+4. **Verify** with the task's own done-check plus `nvim --clean -l test/run.lua`. Visual changes need a look in a real kitty (+ tmux).
 5. **Leave the trail.** Tick `[x]` in `PLAN.md`. Rewrite `PROGRESS.md`. Append to `DECISIONS.md` if you chose something a later reader might undo. Commit saying what and why, then `git push`.
 6. **Stop.** Tests green, nothing half-done.
 

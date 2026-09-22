@@ -16,7 +16,7 @@ local volatile = 0 -- bumped by output that changes on its own (pending diagrams
 local last_diagram = {} -- source row → last ready diagram, shown while an edit re-renders
 local depth = 0 -- list nesting, picks the bullet glyph
 
-function M.reset() cache, used = {}, {} end
+function M.reset() cache, used, last_diagram = {}, {}, {} end
 
 -- Source text of `node`, minus the container prefixes ("> ", list indent)
 -- that tree-sitter marks as block_continuation anywhere inside `from`.
@@ -322,10 +322,10 @@ local render_block
 
 local function heading_level(node)
   if node:type() == 'section' then node = node:named_child(0) end
-  for c in (node and node:iter_children() or function() end) do
-    local l = c:type():match('^atx_h(%d)_marker$') or c:type():match('^setext_h(%d)_underline$')
-    if l then return tonumber(l) end
-  end
+  local t = node and node:type()
+  -- the marker is an atx heading's first child, a setext heading's last
+  local marker = t == 'atx_heading' and node:child(0) or t == 'setext_heading' and node:child(node:child_count() - 1)
+  return marker and tonumber(marker:type():match('(%d)'))
 end
 
 -- Render `nodes` stacked, blank line between them unless `tight`.
@@ -593,7 +593,8 @@ function R.fallback(node, width) return wrap({ { text_of(node, node), { 'VellumM
 ---------------------------------------------------------------- entry
 
 -- Render buffer `buf` for a window `win_width` wide. Returns buffer lines,
--- extmarks { row, col, end_col, group, priority } and anchors for scroll sync.
+-- per-row marks { col, end_col, group, priority } (columns exclude the left
+-- margin), the margin width, and anchors for scroll sync.
 function M.render(buf, win_width, max_width)
   src = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   dir = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':p:h')
@@ -602,21 +603,26 @@ function M.render(buf, win_width, max_width)
   depth = 0
   local body, anchors = blocks(kids(ts.get_parser(buf, 'markdown'):parse()[1]:root()), width, 0)
   cache, used = used, {}
-  local text, marks = { '' }, {} -- a blank first line for breathing room
+  local text, rows = { '' }, { {} } -- a blank first line for breathing room
   for i, line in ipairs(body) do
-    local parts, col = { margin }, #margin
-    for _, s in ipairs(line) do
-      local len = #s[1]
-      local group = s[2] and theme.merge(s[2])
-      if group and len > 0 then marks[#marks + 1] = { i, col, col + len, group, 100 } end
-      for k, m in ipairs(s[3] or {}) do marks[#marks + 1] = { i, col + m[1], col + m[2], m[3], 100 + k } end
-      parts[#parts + 1] = s[1]
-      col = col + len
+    -- flattened once per line object; cached blocks reuse theirs
+    if not line.flat then
+      local parts, marks, col = {}, {}, 0
+      for _, s in ipairs(line) do
+        local len = #s[1]
+        local group = s[2] and theme.merge(s[2])
+        if group and len > 0 then marks[#marks + 1] = { col, col + len, group, 100 } end
+        for k, m in ipairs(s[3] or {}) do marks[#marks + 1] = { col + m[1], col + m[2], m[3], 100 + k } end
+        parts[#parts + 1] = s[1]
+        col = col + len
+      end
+      line.flat = { table.concat(parts), marks }
     end
-    text[i + 1] = table.concat(parts)
+    text[i + 1] = margin .. line.flat[1]
+    rows[i + 1] = line.flat[2]
   end
   for _, a in ipairs(anchors) do a[3] = a[3] + 1 end
-  return text, marks, anchors
+  return text, rows, #margin, anchors
 end
 
 return M

@@ -2,13 +2,13 @@
 
 ## Where things stand
 
-Working plugin. `:Vellum` opens the preview; it re-renders on every edit (0.5 ms when cached, ~10 ms cold for the sample) and follows the cursor. Rendered: headings (H1 band + gradient edge, H2 rule), paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists (nested, ordered, tasks, loose), quotes, GitHub alerts, tables (alignment, wrapping, zebra), code with tree-sitter syntax colors, front matter, HTML blocks (tags stripped, comments hidden), local PNG images, mermaid diagrams as images.
+Working plugin, public at github.com/blackhat-7/vellum.nvim. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor. Keystroke cost: 0.23 ms for a README, 6.1 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings (H1 band + gradient edge, H2 rule), paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists (nested, ordered, tasks, loose), quotes, GitHub alerts, tables (alignment, wrapping, zebra), code with tree-sitter syntax colors, front matter, HTML blocks (tags stripped, comments hidden), local PNG images, mermaid diagrams as images.
 
-Verified by eye in kitty 0.48.2 inside tmux 3.7c. `nvim --clean -l test/run.lua`: 29 checks green.
+Verified by eye in kitty 0.48.2 inside tmux 3.7c. `nvim --clean -l test/run.lua`: 30 checks green.
 
 ## What's next
 
-Top of `PLAN.md`: performance on a large doc.
+Top of `PLAN.md`: install from GitHub with lazy.nvim in a clean config.
 
 ## Gotchas
 

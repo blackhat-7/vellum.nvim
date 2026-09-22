@@ -95,6 +95,7 @@ do
   local lines = doc('Title\n=====\n\nSub\n---\n\n# Closed #')
   check('setext h1', find(lines, 'Title') and find(lines, '▔'))
   check('setext h2', find(lines, 'Sub') and find(lines, '─'))
+  check('setext inside a list item', pcall(doc, '- one\n  two\n  -\n'))
   check('atx closing hashes stripped', find(lines, 'Closed') and not find(lines, 'Closed #'))
 end
 
@@ -150,6 +151,75 @@ do
   check('syntax', style('```lua\nlocal v = 1\n```', 'local'):find('@keyword'), style('```lua\nlocal v = 1\n```', 'local'))
   check('table head', style('| h |\n|---|\n| c |', 'h'):find('TableHead'), style('| h |\n|---|\n| c |', 'h'))
   check('alert color', style('> [!TIP]\n> x', 'Tip'):find('Tip'), style('> [!TIP]\n> x', 'Tip'))
+end
+
+-- fuzz: random edits of the sample never crash and never overflow the window
+do
+  math.randomseed(42)
+  local pieces = { '\n', ' ', '*', '_', '`', '```', '> ', '- ', '1. ', '|', '#', '[', ']', '(', ')', '!', '<', '>', '\\', '~~', '[!NOTE]', '---', '\t', 'é', '漢', '    ' }
+  local crashes, overflow = 0, 0
+  for _ = 1, 300 do
+    local text = sample
+    for _ = 1, math.random(1, 8) do
+      local at = math.random(0, #text)
+      if math.random() < 0.3 then
+        text = text:sub(1, at) .. text:sub(at + math.random(1, 20))
+      else
+        text = text:sub(1, at) .. pieces[math.random(#pieces)] .. text:sub(at + 1)
+      end
+    end
+    local w = math.random(22, 160)
+    local ok, lines = pcall(doc, text, w)
+    if not ok then
+      crashes = crashes + 1
+      if crashes == 1 then print(lines) end
+    else
+      for _, l in ipairs(lines) do
+        if vim.api.nvim_strwidth(l) > w and not l:find('[│╭╰├]') then -- a table may be too wide to fit
+          overflow = overflow + 1
+          if overflow == 1 then print(('overflow at %d: %s'):format(w, l)) end
+          break
+        end
+      end
+    end
+  end
+  check('fuzz: no crash', crashes == 0, crashes .. ' crashes')
+  check('fuzz: no overflow', overflow == 0, overflow .. ' docs')
+end
+
+-- the preview window: open, live edit, follow buffers, close, reopen
+do
+  local vellum = require('vellum')
+  vim.cmd('enew')
+  vim.bo.filetype = 'markdown'
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { '# One' })
+  local src = vim.api.nvim_get_current_buf()
+  vellum.open()
+  local wins = #vim.api.nvim_tabpage_list_wins(0)
+  local pbuf = vim.fn.bufnr('vellum://preview')
+  local function shown(pat) return find(vim.api.nvim_buf_get_lines(pbuf, 0, -1, false), pat) end
+  check('opens a split', wins == 2 and pbuf > 0)
+  check('focus stays in source', vim.api.nvim_get_current_buf() == src)
+  check('first draw', shown('One'))
+  vim.api.nvim_buf_set_lines(src, 0, -1, false, { '# Two' })
+  vellum.redraw()
+  check('redraws edits', shown('Two') and not shown('One'))
+  vim.cmd('enew')
+  vim.bo.filetype = 'markdown'
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'Three' })
+  vim.api.nvim_exec_autocmds('BufEnter', { buffer = 0 })
+  vellum.redraw()
+  check('follows the markdown buffer', shown('Three'))
+  vellum.toggle()
+  check('toggle closes', #vim.api.nvim_tabpage_list_wins(0) == 1 and vim.fn.bufnr('vellum://preview') == -1)
+  vellum.toggle()
+  pbuf = vim.fn.bufnr('vellum://preview')
+  check('toggle reopens', #vim.api.nvim_tabpage_list_wins(0) == 2 and shown('Three'))
+  vim.api.nvim_win_close(vim.fn.bufwinid(pbuf), true)
+  vim.wait(50)
+  vellum.toggle()
+  check('reopens after :close', #vim.api.nvim_tabpage_list_wins(0) == 2)
+  vellum.close()
 end
 
 -- image placeholders are exactly cols wide

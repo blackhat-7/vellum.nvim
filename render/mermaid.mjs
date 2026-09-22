@@ -10,7 +10,11 @@ import puppeteer from 'puppeteer';
 
 const SCALE = 2; // device pixels per CSS px; kitty downsamples, so text stays crisp
 
-const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox'] });
+const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox'] }).catch((e) => {
+  // one short last line: the plugin shows it in place of each diagram
+  console.error('cannot start the browser (run :Lazy build vellum.nvim): ' + String(e.message).split('\n')[0]);
+  process.exit(1);
+});
 const page = await browser.newPage();
 await page.setViewport({ width: 800, height: 800, deviceScaleFactor: SCALE });
 await page.setContent(`<body style="margin:0;background:transparent">

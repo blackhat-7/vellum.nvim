@@ -328,9 +328,12 @@ local render_block
 local function heading_level(node)
   if node:type() == 'section' then node = node:named_child(0) end
   local t = node and node:type()
-  -- the marker is an atx heading's first child, a setext heading's last
-  local marker = t == 'atx_heading' and node:child(0) or t == 'setext_heading' and node:child(node:child_count() - 1)
-  return marker and tonumber(marker:type():match('(%d)'))
+  if t ~= 'atx_heading' and t ~= 'setext_heading' then return nil end
+  -- not child(0) / last child: a block_continuation can sit on either side
+  for c in node:iter_children() do
+    local l = c:type():match('^atx_h(%d)_marker$') or c:type():match('^setext_h(%d)_underline$')
+    if l then return tonumber(l) end
+  end
 end
 
 -- Render `nodes` stacked, blank line between them unless `tight`.

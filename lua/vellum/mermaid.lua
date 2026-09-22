@@ -14,7 +14,7 @@ local function start()
   if not vim.uv.fs_stat(root .. '/node_modules') then return 'renderer not built: run :Lazy build vellum.nvim' end
   vim.fn.mkdir(dir, 'p')
   local partial, stderr = '', ''
-  job = vim.system({ 'node', root .. '/mermaid.mjs' }, {
+  local ok, proc = pcall(vim.system, { 'node', root .. '/mermaid.mjs' }, {
     stdin = true,
     stdout = function(_, data)
       partial = partial .. (data or '')
@@ -39,6 +39,8 @@ local function start()
       M.on_update()
     end)
   end)
+  if not ok then return 'cannot start node: ' .. tostring(proc) end
+  job = proc
 end
 
 -- State of the diagram `code` in the current theme:

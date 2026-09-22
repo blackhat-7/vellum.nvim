@@ -7,7 +7,10 @@
 
 A Neovim plugin: `:Vellum` opens a live, beautifully rendered GitHub-markdown preview in a split beside the buffer you edit. Mermaid diagrams render as real images. Installed with lazy.nvim.
 
-- `lua/vellum/render.lua` — markdown (tree-sitter) → styled lines + extmarks + scroll anchors. Caches per block.
+- `lua/vellum/render.lua` — markdown blocks (tree-sitter) → styled lines + scroll anchors. Caches per block.
+- `lua/vellum/inline.lua` — inline markdown → styled segments; word wrap.
+- `lua/vellum/code.lua` — code panels with syntax colors; mermaid diagrams.
+- `lua/vellum/media.lua` — images (local, remote, any format) → placeholder lines.
 - `lua/vellum/init.lua` — preview window, autocmds, scroll sync.
 - `lua/vellum/theme.lua` — palette derived from the active colorscheme.
 - `lua/vellum/image.lua` — kitty graphics via Unicode placeholders (works through tmux).
@@ -42,7 +45,7 @@ nvim --clean -u test/init.lua test/sample.md -c Vellum # try it by hand
 
 - **Instant.** Typing must never wait on the preview. Unchanged blocks come from the cache; diagrams render off-thread.
 - **The preview never lies.** Every source construct renders, or falls back to its dimmed source text. Nothing silently vanishes except HTML comments and link definitions.
-- **Colors come from the colorscheme.** Never hardcode a palette in `render.lua`; add a group in `theme.lua`.
+- **Colors come from the colorscheme.** Never hardcode a palette in Lua rendering code; add a group in `theme.lua`.
 - **Keep it small.** A file past ~500 lines gets split. No new dependency without a DECISIONS.md entry.
 - **Never weaken a test, type or check to get green.** Changing an assertion needs a stated reason in the commit.
 - **This repository is public.** No credentials, no private paths, no personal data.

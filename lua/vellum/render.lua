@@ -82,6 +82,13 @@ local ENTITIES = {
   trade = '™', mdash = '—', ndash = '–', hellip = '…', rarr = '→', larr = '←', times = '×',
 }
 
+local SUPERSCRIPT = { ['0'] = '⁰', ['1'] = '¹', ['2'] = '²', ['3'] = '³', ['4'] = '⁴', ['5'] = '⁵', ['6'] = '⁶', ['7'] = '⁷', ['8'] = '⁸', ['9'] = '⁹' }
+
+-- Footnote label as shown: superscript digits, else [label].
+local function note(label)
+  return label:match('^%d+$') and (label:gsub('%d', SUPERSCRIPT)) or '[' .. label .. ']'
+end
+
 -- Inline markdown → segments. A { '\n' } segment is a hard line break.
 local function inline(text, hl)
   local segs = {}
@@ -142,8 +149,9 @@ local function inline(text, hl)
         segs[#segs + 1] = { '\n' }
       elseif t == 'html_tag' then
         if text:sub(cs + 1, ce):match('^<[bB][rR]') then segs[#segs + 1] = { '\n' } end
-      elseif t == 'shortcut_link' then -- "[x]" without a definition is literal text
-        push(text:sub(cs + 1, ce), hls)
+      elseif t == 'shortcut_link' then -- "[x]" without a definition is literal text, "[^x]" a footnote
+        local label = text:sub(cs + 1, ce):match('^%[%^([^%]]+)%]$')
+        if label then segs[#segs + 1] = { note(label), with(hls, 'VellumLink') } else push(text:sub(cs + 1, ce), hls) end
       elseif not t:match('delimiter$') then
         walk(c, hls)
       end
@@ -410,9 +418,31 @@ function R.setext_heading(node, width)
   return heading(heading_level(node), inl and text_of(inl, inl) or '', width)
 end
 
+-- "[^label]: text" lines, which tree-sitter sees as one plain paragraph.
+local function footnotes(text, width)
+  local defs = {}
+  for line in (text .. '\n'):gmatch('(.-)\n') do
+    local label, body = line:match('^%[%^([^%]]+)%]:%s*(.*)$')
+    if label then
+      defs[#defs + 1] = { note(label), body }
+    else
+      defs[#defs][2] = defs[#defs][2] .. '\n' .. line
+    end
+  end
+  local out = {}
+  for _, d in ipairs(defs) do
+    local mw = strwidth(d[1]) + 1
+    for k, l in ipairs(wrap(inline(d[2], 'VellumMuted'), width - mw)) do
+      out[#out + 1] = { { k == 1 and d[1] .. ' ' or string.rep(' ', mw), k == 1 and 'VellumLink' or nil }, unpack(l) }
+    end
+  end
+  return out
+end
+
 function R.paragraph(node, width)
   local inl = child(node, 'inline')
   local text = inl and text_of(inl, inl) or text_of(node, node)
+  if text:match('^%[%^[^%]]+%]:') then return footnotes(text, width) end
   local path = text:match('^%s*!%[[^%]]*%]%(%s*<?([^%s>)]+)>?[^)]*%)%s*$')
   return path and local_png(path, width) or wrap(inline(text), width)
 end
@@ -596,7 +626,11 @@ function R.minus_metadata(node, width)
   return code_panel((text_of(node):gsub('^%-%-%-\n', ''):gsub('\n?%-%-%-%s*$', '')), 'yaml', width)
 end
 
-function R.link_reference_definition() return {} end
+-- hidden, except "[^1]: word", which is a one-word footnote
+function R.link_reference_definition(node, width)
+  local text = text_of(node, node)
+  return text:match('^%[%^[^%]]+%]:') and footnotes(text, width) or {}
+end
 
 function R.fallback(node, width) return wrap({ { text_of(node, node), { 'VellumMuted' } } }, width) end
 

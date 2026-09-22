@@ -54,6 +54,7 @@ require('vellum').setup({
 | Tables | aligned, wrapped to fit, zebra rows |
 | Fenced code | tree-sitter syntax colors, language label |
 | ` ```mermaid ` | image (text fallback outside kitty/Ghostty) |
+| Footnotes | superscript refs, muted notes |
 | Local PNG images | image |
 | Front matter, HTML blocks | shown as YAML / text; comments hidden |
 

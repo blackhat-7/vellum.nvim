@@ -123,6 +123,14 @@ do
   check('bare url is a link, minus the period', m and m[3] == 'VellumLink' and l[i]:sub(m[1] + 3, m[2] + 2) == 'https://a.b/c', vim.inspect(m))
 end
 
+-- footnotes
+do
+  local lines = doc('A note[^1] and [^x].\n\n[^1]: First.\n[^x]: Second one\nwraps on.')
+  check('empty footnote label', pcall(doc, '[^]: x\n\n[^]: two words'))
+  check('footnote refs', find(lines, 'A note¹ and %[x%]%.'), vim.inspect(lines))
+  check('footnote defs', find(lines, '^  ¹ First%.$') and find(lines, '^  %[x%] Second one wraps on%.$'), vim.inspect(lines))
+end
+
 -- inline styles land on the right text: the group covering `word`'s first byte
 do
   local function style(text, word)
@@ -156,7 +164,7 @@ end
 -- fuzz: random edits of the sample never crash and never overflow the window
 do
   math.randomseed(42)
-  local pieces = { '\n', ' ', '*', '_', '`', '```', '> ', '- ', '1. ', '|', '#', '[', ']', '(', ')', '!', '<', '>', '\\', '~~', '[!NOTE]', '---', '\t', 'é', '漢', '    ' }
+  local pieces = { '\n', ' ', '*', '_', '`', '```', '> ', '- ', '1. ', '|', '#', '[', ']', '(', ')', '!', '<', '>', '\\', '~~', '[!NOTE]', '[^1]', '\n[^a]: ', '---', '\t', 'é', '漢', '    ' }
   local crashes, overflow = 0, 0
   for _ = 1, 300 do
     local text = sample

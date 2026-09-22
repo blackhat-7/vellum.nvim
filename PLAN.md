@@ -9,5 +9,5 @@ Each line carries its own done-check.
 - [x] Install from GitHub with lazy.nvim in a clean config. Done: `Lazy! sync` ran `build.lua`; a sequence diagram rendered to the cache; a syntax error came back as a message.
 - [x] Every mermaid type readable in dark and light schemes (`test/diagrams.md`). Fixed: gantt text size and axis, black mindmap/timeline boxes (cScale colors).
 - [x] README screenshot of the preview (`docs/screenshot.png`). H1 became a three-row band while checking it.
-- [ ] Footnotes (`[^1]`) render as superscript refs plus a notes section. Done: test in `test/run.lua`.
+- [x] Footnotes: `[^1]` → `¹`, definitions render in place as muted notes (tree-sitter parses them as paragraphs or, for one word, link definitions). Tests + fuzz vocabulary.
 - [ ] Non-PNG local images (jpg, gif, svg) via the browser renderer. Done: test doc shows each.

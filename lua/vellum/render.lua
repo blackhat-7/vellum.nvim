@@ -197,8 +197,7 @@ function R.paragraph(node, width)
   local inl = child(node, 'inline')
   local text = inl and text_of(inl, inl) or text_of(node, node)
   if text:match('^%[%^[^%]]+%]:') then return footnotes(text, width) end
-  local path = text:match('^%s*!%[[^%]]*%]%(%s*<?([^%s>)]+)>?[^)]*%)%s*$') or text:match('^%s*<[iI][mM][gG][^>]-src="([^"]+)"[^>]*>%s*$')
-  return path and media.image(path, width) or inline.wrap(inline.parse(text), width)
+  return inline.wrap(inline.parse(text), width)
 end
 
 function R.fenced_code_block(node, width)
@@ -312,7 +311,11 @@ function R.pipe_table(node, width)
     elseif t == 'pipe_table_header' or t == 'pipe_table_row' then
       local cells = {}
       for c in r:iter_children() do
-        if c:type() == 'pipe_table_cell' then cells[#cells + 1] = inline.parse(vim.trim(text_of(c))) end
+        if c:type() == 'pipe_table_cell' then
+          local segs = inline.parse(vim.trim(text_of(c)))
+          for _, s in ipairs(segs) do s.image = nil end -- a block picture would burst the cell
+          cells[#cells + 1] = segs
+        end
       end
       rows[#rows + 1] = cells
     end
@@ -377,12 +380,11 @@ function R.thematic_break(_, width) return { fade(width, '─', 'VellumFade', tr
 function R.html_block(node, width)
   local text = text_of(node, node)
   if text:match('^%s*<!%-%-') then return {} end
-  local img = text:match('<img[^>]-src="([^"]+)"')
-  local shown = img and media.image(img, width)
-  if shown then return shown end
-  -- an image that cannot be shown keeps its alt text, as markdown images do
-  text = text:gsub('<img[^>]-alt="([^"]*)"[^>]*>', '󰋩 %1')
-  text = vim.trim((text:gsub('</?%a[^>]*>', ''))) -- tags only: "<40 words" is text
+  -- tags go, except <img> and <br>, which the inline parser renders; only
+  -- tags: "<40 words" is text
+  text = vim.trim((text:gsub('</?%a[^>]*>', function(tag)
+    return (tag:match('^<[iI][mM][gG]') or tag:match('^<[bB][rR]')) and tag or ''
+  end)))
   return text == '' and {} or inline.wrap(inline.parse(text), width)
 end
 

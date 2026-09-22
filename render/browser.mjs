@@ -96,7 +96,8 @@ async function render(req) {
   const error = await (req.image ? picture(req) : diagram(req));
   if (error) return { out: req.out, error };
   // write then rename, so a killed process never leaves a half PNG in the cache
-  await (await page.$('#c')).screenshot({ path: req.out + '.tmp.png', omitBackground: true });
+  // diagrams keep the container's padding; images are shot bare, at their own size
+  await (await page.$(req.image ? '#c img' : '#c')).screenshot({ path: req.out + '.tmp.png', omitBackground: true });
   renameSync(req.out + '.tmp.png', req.out);
   return { out: req.out };
 }

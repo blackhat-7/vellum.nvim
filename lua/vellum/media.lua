@@ -8,12 +8,14 @@ local M = {}
 M.dir = '.' -- directory of the markdown file, for relative paths
 M.pending = 0 -- bumped by output still being rendered, which must not be cached
 
+local ROW = 24 -- CSS px per text row: 16px text in an image lands near terminal text size
+
 -- An image centered in `width`; `density` is image pixels per CSS pixel.
 function M.picture(file, pw, ph, width, density)
   local cw, ch = image.cell()
-  -- natural size puts 16px diagram text near terminal text size; shrink to
-  -- fit, but not below 75% of that: past it, scroll sideways like a wide table
-  local natural = pw / density * ch / 24 / cw
+  -- natural size first; shrink to fit, but not below 75% of it: past that,
+  -- scroll sideways like a wide table
+  local natural = pw / density * ch / ROW / cw
   local cols = math.ceil(math.min(natural, math.max(width, 0.75 * natural)))
   cols = math.max(1, math.min(cols, image.max_cells))
   local rows = math.max(1, math.floor(cols * cw * ph / pw / ch + 0.5))
@@ -27,9 +29,9 @@ function M.picture(file, pw, ph, width, density)
   return out
 end
 
--- Lines showing image `src` (local path or http(s) URL), or nil to fall back
--- to its alt text.
-function M.image(src, width)
+-- The PNG showing image `src` (local path or http(s) URL): file, width,
+-- height, density. Nil while it renders or when it cannot be shown.
+local function load(src)
   if not image.supported or image.problem then return nil end
   local remote, version = src:match('^https?://'), os.date('%F') -- remote images refresh daily
   if not remote then
@@ -39,14 +41,29 @@ function M.image(src, width)
     if not stat or stat.type ~= 'file' then return nil end
     if src:lower():match('%.png$') then
       local pw, ph = image.png_size(src)
-      return pw and M.picture(src, pw, ph, width, 1)
+      return pw and src, pw, ph, 1
     end
     version = stat.mtime.sec .. '.' .. stat.size
   end
   local state, file, size = browser.image(src, version)
-  if state == 'ready' then return M.picture(file, size[1], size[2], width, 2) end
+  if state == 'ready' then return file, size[1], size[2], 2 end
   if state == 'pending' then M.pending = M.pending + 1 end
-  return nil
+end
+
+-- Lines showing image `src` as a block, or nil.
+function M.image(src, width)
+  local file, pw, ph, density = load(src)
+  return file and M.picture(file, pw, ph, width, density)
+end
+
+-- A small image (badge, icon) as one segment one text row high, to sit in a
+-- line of text. Nil when it is not ready or taller than about one row.
+function M.inline(src)
+  local file, pw, ph, density = load(src)
+  if not file or ph / density > 1.5 * ROW then return nil end
+  local cw, ch = image.cell()
+  local cols = math.max(1, math.min(image.max_cells, math.floor(pw / ph * ch / cw + 0.5)))
+  return image.lines(file, cols, 1)[1][1]
 end
 
 return M

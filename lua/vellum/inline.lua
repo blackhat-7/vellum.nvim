@@ -1,6 +1,8 @@
 -- Inline markdown → segments, and word wrap of segments into lines.
 -- A segment is { text, hl, marks }: hl is nil, a group, or a list of groups
 -- (merged, later wins); marks are extra { start, end, group } byte ranges.
+local media = require('vellum.media')
+
 local ts = vim.treesitter
 local strwidth = vim.api.nvim_strwidth
 local M = {}
@@ -54,7 +56,17 @@ function M.parse(text, hl)
     end
     if i <= #s then segs[#segs + 1] = { s:sub(i), hls } end
   end
+  -- a small image sits in the line; any other shows its alt text and keeps
+  -- `image`, so wrap can put the picture on lines of its own
+  local function picture(src, alt, hls)
+    local seg = src and media.inline(src)
+    segs[#segs + 1] = seg or { '󰋩 ' .. alt, with(hls, 'VellumMuted'), image = src }
+  end
   local function span(n) return select(3, n:start()), select(3, n:end_()) end
+  local function slice(n)
+    local a, b = span(n)
+    return text:sub(a + 1, b)
+  end
   -- `literal`: this node's delimiters are text, not markup
   local function walk(node, hls, literal)
     local pos, stop = span(node)
@@ -85,8 +97,8 @@ function M.parse(text, hl)
         local label = child(c, 'link_text')
         if label then walk(label, with(hls, 'VellumLink')) end
       elseif t == 'image' then
-        local alt = child(c, 'image_description')
-        segs[#segs + 1] = { '󰋩 ' .. (alt and text:sub(select(3, alt:start()) + 1, select(3, alt:end_())) or 'image'), with(hls, 'VellumMuted') }
+        local alt, dest = child(c, 'image_description'), child(c, 'link_destination')
+        picture(dest and (slice(dest):match('^<(.*)>$') or slice(dest)), alt and slice(alt) or 'image', hls)
       elseif t == 'uri_autolink' or t == 'email_autolink' then
         segs[#segs + 1] = { text:sub(cs + 2, ce - 1), with(hls, 'VellumLink') }
       elseif t == 'backslash_escape' then
@@ -100,8 +112,7 @@ function M.parse(text, hl)
       elseif t == 'html_tag' then
         local tag = text:sub(cs + 1, ce)
         if tag:match('^<[bB][rR]') then segs[#segs + 1] = { '\n' } end
-        local alt = tag:match('^<[iI][mM][gG][^>]-alt="([^"]*)"')
-        if alt then segs[#segs + 1] = { '󰋩 ' .. alt, with(hls, 'VellumMuted') } end
+        if tag:match('^<[iI][mM][gG]') then picture(tag:match('src="([^"]*)"'), tag:match('alt="([^"]*)"') or 'image', hls) end
       elseif t == 'shortcut_link' then -- "[x]" without a definition is literal text, "[^x]" a footnote
         local label = text:sub(cs + 1, ce):match('^%[%^([^%]]+)%]$')
         if label then segs[#segs + 1] = { M.note(label), with(hls, 'VellumLink') } else push(text:sub(cs + 1, ce), hls) end
@@ -120,6 +131,7 @@ end
 
 -- Greedy word wrap. A word may span segments ("**bold**,"), so breaks happen
 -- only at whitespace; a word wider than the line is split by characters.
+-- An image segment that can be shown becomes a picture on lines of its own.
 function M.wrap(segs, width)
   local lines, line, w = {}, {}, 0
   local word, ww, space = {}, 0, nil
@@ -147,7 +159,13 @@ function M.wrap(segs, width)
     word, ww, space = {}, 0, nil
   end
   for _, s in ipairs(segs) do
-    if s[1] == '\n' then
+    local pic = s.image and media.image(s.image, width)
+    if pic then
+      flush()
+      if w > 0 then newline() end
+      vim.list_extend(lines, pic)
+      space = nil
+    elseif s[1] == '\n' then
       flush()
       newline()
       space = nil

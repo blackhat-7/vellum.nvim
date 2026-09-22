@@ -12,7 +12,7 @@ Each line carries its own done-check.
 - [x] Footnotes: `[^1]` → `¹`, definitions render in place as muted notes (tree-sitter parses them as paragraphs or, for one word, link definitions). Tests + fuzz vocabulary.
 - [x] Non-PNG and remote images via the browser renderer (jpg, gif, webp, svg, http(s)). Seen in kitty: `test/sample.md` Images section.
 - [x] Split `render.lua` (737 lines) into `inline.lua`, `media.lua`, `code.lua`. Done: each file < 500 lines, tests green, perf unchanged.
-- [ ] Inline images inside text (badge rows): small ones sit in the line, big ones break out as block pictures. Done: badge row in `test/sample.md` renders as images in kitty.
+- [x] Inline images inside text (badge rows): small ones sit in the line, big ones break out as block pictures. Done: badge row in `test/sample.md` renders as images in kitty.
 - [ ] `<details>`/`<summary>`: summary shows as "▾ summary", body renders as normal markdown. Done: test + sample.
 - [ ] Start the renderer when `:Vellum` opens, so the first diagram does not wait for Chrome. Done: first diagram shows without the 0.7 s wait.
 - [ ] Cap the PNG cache (`stdpath('cache')/vellum`) at 100 MB, least recently used out first. Done: test fills a temp cache past the cap.

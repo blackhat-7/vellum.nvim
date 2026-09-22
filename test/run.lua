@@ -258,10 +258,12 @@ do
     f:close()
   end
   png('wide.png', 9000, 600)
-  png('small.png', 64, 32)
+  png('small.png', 200, 100)
+  png('badge.png', 80, 20)
   image.supported, image.problem = true, nil
   local cw, ch = image.cell()
   local lines = doc('![w](' .. dir .. '/wide.png)\n\n![s](' .. dir .. '/small.png)', 84)
+  local badges = doc('CI [![ci](' .. dir .. '/badge.png)](x) <img src="' .. dir .. '/badge.png"> ok\n\nsee ![s](' .. dir .. '/small.png) below', 84)
   image.supported = false
   local widest, small = 0, nil
   for _, l in ipairs(lines) do
@@ -269,7 +271,13 @@ do
     if not small and l:find(vim.fn.nr2char(0x10EEEE)) and vim.api.nvim_strwidth(l) < 84 then small = l end
   end
   check('wide image scrolls', widest > 84, widest)
-  check('small image natural size', small and vim.api.nvim_strwidth(vim.trim(small)) == math.ceil(64 * ch / 24 / cw), small)
+  check('small image natural size', small and vim.api.nvim_strwidth(vim.trim(small)) == math.ceil(200 * ch / 24 / cw), small)
+  local ph = vim.fn.nr2char(0x10EEEE)
+  local _, row = find(badges, '^%s*CI ')
+  local cells = math.floor(80 / 20 * ch / cw + 0.5)
+  check('badges sit in the text line', row and row:find('ok$') and select(2, row:gsub(ph, '')) == 2 * cells, row)
+  local i = find(badges, '^%s*see$')
+  check('big image in text gets its own lines', i and badges[i + 1]:find(ph) and find(badges, '^%s*below$'), vim.inspect(badges))
 end
 
 -- image placeholders are exactly cols wide

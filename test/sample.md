@@ -57,7 +57,9 @@ flowchart LR
 
 ![logo](images/logo.svg)
 
-![badge](https://img.shields.io/badge/vellum-nvim-blue.svg)
+Badges sit in the text: [![vellum](https://img.shields.io/badge/vellum-nvim-blue.svg)](#) [![license](https://img.shields.io/badge/license-MIT-green.svg)](#) and a big image breaks out: ![logo](images/logo.svg) back to text.
+
+<p align="center"><img src="https://img.shields.io/badge/html-badge-orange.svg" alt="html badge"> <img src="images/dot.gif" alt="dot"></p>
 
 ### Level 3
 #### Level 4

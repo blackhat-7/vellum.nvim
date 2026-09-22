@@ -33,7 +33,7 @@ local DIACRITICS = {
 }
 
 local PLACEHOLDER = vim.fn.nr2char(0x10EEEE)
-M.max_rows = #DIACRITICS
+M.max_cells = #DIACRITICS -- per row and per column
 
 -- Which terminal draws the images, and whether it can. Inside tmux (often
 -- over ssh, where env vars lie) tmux reports the attached terminal. tmux also
@@ -124,11 +124,16 @@ function M.lines(path, cols, rows)
     sent[id] = true
     transmit(id, cols, rows, path)
   end
+  -- every cell names its row and column, so an image scrolled sideways
+  -- (wider than the window) still draws the right slice
+  local col = {}
+  for c = 1, cols do col[c] = vim.fn.nr2char(DIACRITICS[c]) end
   local out = {}
-  local rest = PLACEHOLDER:rep(cols - 1)
   for r = 1, rows do
-    -- only the first cell carries row+column; kitty infers the rest
-    out[r] = { { PLACEHOLDER .. vim.fn.nr2char(DIACRITICS[r]) .. vim.fn.nr2char(DIACRITICS[1]) .. rest, hl } }
+    local cell = PLACEHOLDER .. vim.fn.nr2char(DIACRITICS[r])
+    local parts = {}
+    for c = 1, cols do parts[c] = cell .. col[c] end
+    out[r] = { { table.concat(parts), hl } }
   end
   return out
 end

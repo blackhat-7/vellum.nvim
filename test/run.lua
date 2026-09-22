@@ -30,12 +30,13 @@ end
 
 local sample = table.concat(vim.fn.readfile('test/sample.md'), '\n')
 
--- no line is wider than the window, at any width
+-- no line is wider than the window, at any width (a table too wide to fit
+-- scrolls sideways instead of splitting words, as on GitHub)
 for _, w in ipairs({ 24, 40, 57, 80, 84, 121, 200 }) do
   local lines = doc(sample, w)
   for i, l in ipairs(lines) do
     local sw = vim.api.nvim_strwidth(l)
-    if sw > w then check('width ' .. w, false, ('line %d is %d wide: %s'):format(i, sw, l)) break end
+    if sw > w and not l:find('[│╭╰├]') then check('width ' .. w, false, ('line %d is %d wide: %s'):format(i, sw, l)) break end
   end
 end
 
@@ -115,6 +116,9 @@ do
   ok = true
   for _, l in ipairs(lines) do ok = ok and vim.api.nvim_strwidth(l) <= 50 end
   check('wide table fits', ok)
+  lines = doc('| a | b | c |\n|---|---|---|\n| Supercalifragilistic | Antidisestablishment | Floccinaucinihilipilification |', 40)
+  check('wide table keeps words whole', find(lines, 'Supercalifragilistic') and find(lines, 'Floccinaucinihilipilification'), vim.inspect(lines))
+  check('html img alt', find(doc('<p>\n<img alt="Big logo" src="x.png">\n</p>'), '󰋩 Big logo'))
   check('ordered start', find(doc('7. a\n8. b'), '7%. a'))
   check('task list', find(doc('- [x] done'), '󰄵 done'))
   local l, rows = doc('go to https://a.b/c. now')
@@ -228,6 +232,32 @@ do
   vellum.toggle()
   check('reopens after :close', #vim.api.nvim_tabpage_list_wins(0) == 2)
   vellum.close()
+end
+
+-- images: a small one stays centered at natural size, a very wide one keeps
+-- readable size and scrolls sideways instead of shrinking to a smear
+do
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, 'p')
+  local function png(name, w, h) -- only the header is read for the size
+    local function u32(n) return string.char(math.floor(n / 16777216) % 256, math.floor(n / 65536) % 256, math.floor(n / 256) % 256, n % 256) end
+    local f = io.open(dir .. '/' .. name, 'wb')
+    f:write('\137PNG\r\n\26\n' .. u32(13) .. 'IHDR' .. u32(w) .. u32(h))
+    f:close()
+  end
+  png('wide.png', 9000, 600)
+  png('small.png', 64, 32)
+  image.supported, image.problem = true, nil
+  local cw, ch = image.cell()
+  local lines = doc('![w](' .. dir .. '/wide.png)\n\n![s](' .. dir .. '/small.png)', 84)
+  image.supported = false
+  local widest, small = 0, nil
+  for _, l in ipairs(lines) do
+    widest = math.max(widest, vim.api.nvim_strwidth(l))
+    if not small and l:find(vim.fn.nr2char(0x10EEEE)) and vim.api.nvim_strwidth(l) < 84 then small = l end
+  end
+  check('wide image scrolls', widest > 84, widest)
+  check('small image natural size', small and vim.api.nvim_strwidth(vim.trim(small)) == math.ceil(64 * ch / 24 / cw), small)
 end
 
 -- image placeholders are exactly cols wide

@@ -21,6 +21,7 @@ Lua for Neovim ≥ 0.12. Node ≥ 20 for the renderer only.
 ```sh
 nvim --clean -l test/run.lua                           # assertion tests, headless
 nvim --clean -l test/perf.lua                          # keystroke cost on 5,000 lines
+nvim --clean -l test/sweep.lua paths.txt out.tsv       # crash/overflow/missing-text sweep over real files
 nvim --clean --headless -c 'luafile test/dump.lua' -c 'qa!'   # print the rendered sample
 nvim --clean -u test/init.lua test/sample.md -c Vellum # try it by hand
 (cd render && npm ci && npx puppeteer browsers install chrome-headless-shell)  # build renderer

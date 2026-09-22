@@ -42,6 +42,28 @@ const diagram = ({ code, theme }) => page.evaluate(async (code, id, theme) => {
     const s = c.firstElementChild;
     s.style.width = s.style.maxWidth || '';
     s.style.maxWidth = 'none';
+    // classDef/style often set a light fill but no text color, which is fine
+    // on GitHub's light page and unreadable on a dark theme: pick dark or
+    // light text wherever a label would not stand out from its box
+    const lum = (css) => {
+      const m = /^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/.exec(css);
+      if (!m) return null;
+      const [r, g, b] = m.slice(1).map((v) => (v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    for (const node of s.querySelectorAll('g.node')) {
+      const shape = node.querySelector('rect, polygon, circle, ellipse, path');
+      const bg = shape && lum(getComputedStyle(shape).fill);
+      if (bg == null) continue;
+      for (const t of node.querySelectorAll('.nodeLabel, .nodeLabel *, text, tspan')) {
+        const style = getComputedStyle(t);
+        const fg = lum(t instanceof SVGElement ? style.fill : style.color);
+        if (fg == null || (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05) >= 3) continue;
+        const ink = bg > 0.18 ? '#1b1b1f' : '#f2f2f5';
+        t.style.setProperty('color', ink, 'important');
+        t.style.setProperty('fill', ink, 'important');
+      }
+    }
     return null;
   } catch (e) {
     c.innerHTML = '';

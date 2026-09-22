@@ -235,14 +235,17 @@ end
 -- An image centered in `width`; `density` is image pixels per CSS pixel.
 local function picture(file, pw, ph, width, density)
   local cw, ch = image.cell()
-  -- scale so 16px diagram text lands near terminal text size
-  local cols = math.max(1, math.min(width, math.ceil(pw / density * ch / 24 / cw)))
+  -- natural size puts 16px diagram text near terminal text size; shrink to
+  -- fit, but not below 75% of that: past it, scroll sideways like a wide table
+  local natural = pw / density * ch / 24 / cw
+  local cols = math.ceil(math.min(natural, math.max(width, 0.75 * natural)))
+  cols = math.max(1, math.min(cols, image.max_cells))
   local rows = math.max(1, math.floor(cols * cw * ph / pw / ch + 0.5))
-  if rows > image.max_rows then
-    rows = image.max_rows
-    cols = math.max(1, math.min(width, math.floor(rows * ch * pw / ph / cw)))
+  if rows > image.max_cells then
+    rows = image.max_cells
+    cols = math.max(1, math.floor(rows * ch * pw / ph / cw))
   end
-  local pad = { string.rep(' ', math.floor((width - cols) / 2)) }
+  local pad = { string.rep(' ', math.max(0, math.floor((width - cols) / 2))) }
   local out = {}
   for i, l in ipairs(image.lines(file, cols, rows)) do out[i] = { pad, l[1] } end
   return out
@@ -580,17 +583,25 @@ function R.pipe_table(node, width)
     end
   end
   local n = #align
-  local cw, total = {}, 0
+  local cw, least, total = {}, {}, 0
   for c = 1, n do
-    cw[c] = 1
-    for _, row in ipairs(rows) do cw[c] = math.max(cw[c], segs_width(row[c] or {})) end
+    cw[c], least[c] = 1, 1
+    for _, row in ipairs(rows) do
+      cw[c] = math.max(cw[c], segs_width(row[c] or {}))
+      for _, s in ipairs(row[c] or {}) do
+        for word in s[1]:gmatch('%S+') do least[c] = math.max(least[c], math.min(30, strwidth(word))) end
+      end
+    end
     total = total + cw[c]
   end
-  -- shrink the widest column until the table fits; cells then wrap
+  -- shrink the widest column until the table fits, never splitting a word;
+  -- a table that still does not fit scrolls sideways, as on GitHub
   while total > width - 3 * n - 1 do
-    local widest = 1
-    for c = 2, n do if cw[c] > cw[widest] then widest = c end end
-    if cw[widest] <= 4 then break end
+    local widest
+    for c = 1, n do
+      if cw[c] > least[c] and (not widest or cw[c] > cw[widest]) then widest = c end
+    end
+    if not widest then break end
     cw[widest], total = cw[widest] - 1, total - 1
   end
   local B = 'VellumBorder'
@@ -634,6 +645,8 @@ function R.html_block(node, width)
   local img = text:match('<img[^>]-src="([^"]+)"')
   local shown = img and picture_of(img, width)
   if shown then return shown end
+  -- an image that cannot be shown keeps its alt text, as markdown images do
+  text = text:gsub('<img[^>]-alt="([^"]*)"[^>]*>', '󰋩 %1')
   text = vim.trim((text:gsub('<[^>]*>', '')))
   return text == '' and {} or wrap(inline(text), width)
 end

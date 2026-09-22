@@ -6,8 +6,8 @@ A live markdown preview that renders beside your buffer, inside the terminal. Gi
 
 - **Live.** Every keystroke re-renders. Unchanged blocks come from a cache, so it stays instant on long documents.
 - **Follows you.** The preview scrolls with your cursor.
-- **Looks like a document.** Heading bands with gradient edges, syntax-highlighted code panels, rounded tables with zebra rows, GitHub alerts, task lists. The colors come from your colorscheme.
-- **Real diagrams.** Mermaid renders in a headless browser, exactly like GitHub, sized to match your terminal font. Each diagram renders once and is cached on disk.
+- **Looks like a document.** Heading bands with gradient edges, syntax-highlighted code panels, rounded tables with zebra rows, GitHub alerts, task lists, `<details>` blocks. Badges sit inline, like on GitHub. The colors come from your colorscheme.
+- **Real diagrams.** Mermaid renders in a headless browser, exactly like GitHub, sized to match your terminal font. Each diagram renders once and is cached on disk (capped at 100 MB).
 
 ## Requirements
 

@@ -2,13 +2,15 @@
 
 ## Where things stand
 
-Working plugin, public at github.com/blackhat-7/vellum.nvim. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor. Keystroke cost: 0.23 ms for a README, 6.1 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings (H1 band + gradient edge, H2 rule), paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists (nested, ordered, tasks, loose), quotes, GitHub alerts, footnotes, tables (alignment, wrapping, zebra), code with tree-sitter syntax colors, front matter, HTML blocks (tags stripped, comments hidden), images (PNG direct; jpg/gif/webp/svg and http(s) via the browser), mermaid diagrams as images.
+Working plugin, public at github.com/blackhat-7/vellum.nvim. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor. Keystroke cost: 0.23 ms for a README, ~6.7 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings, paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists, quotes, GitHub alerts, footnotes, tables, code with syntax colors, front matter, HTML blocks, `<details>` summaries (`▾`), images (block, or inline one row high for badges), mermaid diagrams.
 
-Verified by eye in kitty 0.48.2 inside tmux 3.7c. `nvim --clean -l test/run.lua`: 55 checks green: rendering, inline styling, window lifecycle, and a 300-case fuzz (10,000 cases over 10 seeds were also clean).
+Rendering is split by job: `render.lua` (blocks), `inline.lua` (inline text, wrap), `code.lua` (code panels, diagrams), `media.lua` (images). The renderer starts on `:Vellum`; the PNG cache is capped at 100 MB.
+
+Verified by eye in kitty inside tmux. `nvim --clean -l test/run.lua`: 73 checks green.
 
 ## What's next
 
-`PLAN.md` has no open tasks. Candidates: inline images inside a paragraph (badge rows), a cache size cap for `stdpath('cache')/vellum`, `<details>` blocks.
+`PLAN.md` has no open tasks. Candidates: keystroke cost at 5,000 lines under 5 ms; a hint for terminals without kitty graphics.
 
 ## Gotchas
 
@@ -21,3 +23,4 @@ Verified by eye in kitty 0.48.2 inside tmux 3.7c. `nvim --clean -l test/run.lua`
 - **Screenshot harness can mimic ssh:** kitty `-o term=xterm-256color` and `env -u COLORTERM` before tmux.
 - **Kitty placeholders need `termguicolors`**: the image id is the fg color.
 - **Screenshot checks:** a headless Hyprland output (`hyprctl output create headless`) plus `grim -o` captures kitty without covering the real screen. Launch kitty with `-o confirm_os_window_close=0`.
+- **`vim.fn.tempname()` + `XDG_CACHE_HOME`:** `test/run.lua` sets a private cache before requiring the plugin, because `browser.lua` prunes the cache on load.

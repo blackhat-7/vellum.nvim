@@ -51,6 +51,13 @@ flowchart LR
 <!-- hidden comment -->
 <p align="center">centered html</p>
 
+<details>
+<summary>Click to <b>expand</b></summary>
+
+Hidden on GitHub until clicked, with *markdown* inside.
+
+</details>
+
 ## Images
 
 ![gradient](images/grad.jpg)

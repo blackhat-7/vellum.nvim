@@ -377,15 +377,25 @@ end
 
 function R.thematic_break(_, width) return { fade(width, '─', 'VellumFade', true) } end
 
-function R.html_block(node, width)
-  local text = text_of(node, node)
-  if text:match('^%s*<!%-%-') then return {} end
-  -- tags go, except <img> and <br>, which the inline parser renders; only
-  -- tags: "<40 words" is text
+-- HTML text as lines: tags go, except <img> and <br>, which the inline
+-- parser renders. Only tags: "<40 words" is text.
+local function html(text, width, hl)
   text = vim.trim((text:gsub('</?%a[^>]*>', function(tag)
     return (tag:match('^<[iI][mM][gG]') or tag:match('^<[bB][rR]')) and tag or ''
   end)))
-  return text == '' and {} or inline.wrap(inline.parse(text), width)
+  return text == '' and {} or inline.wrap(inline.parse(text, hl), width)
+end
+
+function R.html_block(node, width)
+  local text = text_of(node, node)
+  if text:match('^%s*<!%-%-') then return {} end
+  -- <details> shows open, as on GitHub once clicked: a marked summary line,
+  -- then the body, which tree-sitter parses as the blocks that follow
+  local before, summary, after = text:match('^(.-)<summary[^>]*>(.-)</summary>(.*)$')
+  if not summary then return html(text, width) end
+  local out = html(before, width)
+  vim.list_extend(out, html('▾ ' .. summary, width, 'VellumBold'))
+  return vim.list_extend(out, html(after, width))
 end
 
 function R.minus_metadata(node, width)

@@ -10,7 +10,11 @@ local job, pending, errors, sizes = nil, {}, {}, {}
 
 M.on_update = function() end
 
-local function start()
+-- Start the renderer, if it is not running. Loading Chrome and mermaid takes
+-- ~0.7 s, so the preview starts it on open rather than on the first diagram.
+-- Returns an error message, or nil.
+function M.start()
+  if job then return end
   if not vim.uv.fs_stat(root .. '/node_modules') then return 'renderer not built: run :Lazy build vellum.nvim' end
   vim.fn.mkdir(dir, 'p')
   local partial, stderr = '', ''
@@ -53,10 +57,8 @@ local function request(key, payload)
   end
   if sizes[out] then return 'ready', out, sizes[out] end
   if not pending[out] then
-    if not job then
-      local err = start()
-      if err then return 'error', err end
-    end
+    local err = M.start()
+    if err then return 'error', err end
     pending[out] = true
     payload.out = out
     job:write(vim.json.encode(payload) .. '\n')

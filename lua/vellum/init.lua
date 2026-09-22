@@ -83,6 +83,7 @@ function M.open()
   wo.fillchars, wo.winfixbuf = 'eob: ', true
   vim.keymap.set('n', 'q', M.close, { buffer = S.buf, desc = 'Close preview' })
   theme.apply()
+  if image.supported and not image.problem then browser.start() end
 
   local au = function(ev, fn, opts) api.nvim_create_autocmd(ev, vim.tbl_extend('force', { group = group, callback = fn }, opts or {})) end
   au({ 'TextChanged', 'TextChangedI', 'TextChangedP' }, function(ev) if ev.buf == S.src then update() end end)

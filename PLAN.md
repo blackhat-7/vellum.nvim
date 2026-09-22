@@ -8,6 +8,6 @@ Each line carries its own done-check.
 - [x] Performance on a 5,000-line doc. `nvim --clean -l test/perf.lua`: 25 → 6.1 ms median per keystroke (target was 5; parse is 0.6, the rest is a linear tree walk). A README re-renders in 0.23 ms.
 - [x] Install from GitHub with lazy.nvim in a clean config. Done: `Lazy! sync` ran `build.lua`; a sequence diagram rendered to the cache; a syntax error came back as a message.
 - [x] Every mermaid type readable in dark and light schemes (`test/diagrams.md`). Fixed: gantt text size and axis, black mindmap/timeline boxes (cScale colors).
-- [ ] README screenshot of the preview. Done when README shows it.
+- [x] README screenshot of the preview (`docs/screenshot.png`). H1 became a three-row band while checking it.
 - [ ] Footnotes (`[^1]`) render as superscript refs plus a notes section. Done: test in `test/run.lua`.
 - [ ] Non-PNG local images (jpg, gif, svg) via the browser renderer. Done: test doc shows each.

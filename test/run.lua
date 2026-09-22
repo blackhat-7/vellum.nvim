@@ -116,7 +116,40 @@ do
   check('wide table fits', ok)
   check('ordered start', find(doc('7. a\n8. b'), '7%. a'))
   check('task list', find(doc('- [x] done'), '󰄵 done'))
-  check('bare url', find(doc('go to https://a.b/c.'), 'https://a.b/c%.'))
+  local l, rows = doc('go to https://a.b/c. now')
+  local i = find(l, 'https://a.b/c%. now')
+  local m = i and rows[i] and rows[i][1]
+  check('bare url is a link, minus the period', m and m[3] == 'VellumLink' and l[i]:sub(m[1] + 3, m[2] + 2) == 'https://a.b/c', vim.inspect(m))
+end
+
+-- inline styles land on the right text: the group covering `word`'s first byte
+do
+  local function style(text, word)
+    local l, rows = doc(text)
+    for i, line in ipairs(l) do
+      local at = line:find(word, 1, true)
+      if at then
+        local groups = {}
+        for _, m in ipairs(rows[i] or {}) do
+          if m[1] + 2 < at and at <= m[2] + 2 then groups[#groups + 1] = m[3] end
+        end
+        return table.concat(groups, ' ')
+      end
+    end
+    return 'not found'
+  end
+  local md = 'a **bold** b *ital* c ~~gone~~ d `mono` e [label](http://x) f'
+  check('bold', style(md, 'bold'):find('Bold'), style(md, 'bold'))
+  check('italic', style(md, 'ital'):find('Italic'), style(md, 'ital'))
+  check('strike', style(md, 'gone'):find('Strike'), style(md, 'gone'))
+  check('code', style(md, 'mono'):find('Code'), style(md, 'mono'))
+  check('link', style(md, 'label'):find('Link'), style(md, 'label'))
+  check('plain', style(md, ' f') == '', style(md, ' f'))
+  check('nested', style('***both***', 'both'):find('Bold') and style('***both***', 'both'):find('Italic'), style('***both***', 'both'))
+  check('heading color', style('## Head', 'Head'):find('H2'), style('## Head', 'Head'))
+  check('syntax', style('```lua\nlocal v = 1\n```', 'local'):find('@keyword'), style('```lua\nlocal v = 1\n```', 'local'))
+  check('table head', style('| h |\n|---|\n| c |', 'h'):find('TableHead'), style('| h |\n|---|\n| c |', 'h'))
+  check('alert color', style('> [!TIP]\n> x', 'Tip'):find('Tip'), style('> [!TIP]\n> x', 'Tip'))
 end
 
 -- image placeholders are exactly cols wide

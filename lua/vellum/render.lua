@@ -107,7 +107,9 @@ local function inline(text, hl)
   local function span(n) return select(3, n:start()), select(3, n:end_()) end
   local function walk(node, hls)
     local pos, stop = span(node)
+    -- anonymous children are punctuation ("/", ":"); they stay in the text runs
     for c in node:iter_children() do
+      if not c:named() then goto continue end
       local cs, ce = span(c)
       push(text:sub(pos + 1, cs), hls)
       pos = ce
@@ -145,6 +147,7 @@ local function inline(text, hl)
       elseif not t:match('delimiter$') then
         walk(c, hls)
       end
+      ::continue::
     end
     push(text:sub(pos + 1, stop), hls)
   end
@@ -379,14 +382,16 @@ local function heading(level, text, width)
     if level == 2 then out[#out + 1] = fade(width, '─', 'VellumFadeMuted') end
     return out
   end
-  -- H1: a tinted band with a gradient edge underneath
-  local out = {}
+  -- H1: a tall tinted band with a gradient edge underneath
+  local pad = { { string.rep(' ', width), 'VellumH1Band' } }
+  local out = { pad }
   for _, l in ipairs(wrap(segs, width - 4)) do
     local line = { { '  ', 'VellumH1Band' } }
     for _, s in ipairs(l) do line[#line + 1] = { s[1], under(s[2], 'VellumH1Band') } end
     line[#line + 1] = { string.rep(' ', width - 2 - segs_width(l)), 'VellumH1Band' }
     out[#out + 1] = line
   end
+  out[#out + 1] = pad
   out[#out + 1] = fade(width, '▔', 'VellumFade')
   return out
 end

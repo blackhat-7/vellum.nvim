@@ -2,6 +2,8 @@
 
 A live markdown preview that renders beside your buffer, inside the terminal. GitHub-flavored markdown, with mermaid diagrams as real images.
 
+![vellum.nvim: markdown source on the left, live preview on the right](docs/screenshot.png)
+
 - **Live.** Every keystroke re-renders. Unchanged blocks come from a cache, so it stays instant on long documents.
 - **Follows you.** The preview scrolls with your cursor.
 - **Looks like a document.** Heading bands with gradient edges, syntax-highlighted code panels, rounded tables with zebra rows, GitHub alerts, task lists. The colors come from your colorscheme.

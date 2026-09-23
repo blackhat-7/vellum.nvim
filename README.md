@@ -2,7 +2,7 @@
 
 A markdown preview for Neovim. It renders in a split beside your buffer, inside the terminal. GitHub-flavored markdown, with mermaid diagrams and display math as real images.
 
-![Demo: open the preview, scroll, edit a diagram label and watch it redraw, scroll past math and a sequence diagram, scroll the preview with the mouse, zoom into a diagram, resize the split](docs/demo.webp)
+![Demo on docs/showcase.md: open the preview, edit a label in a large architecture diagram, zoom and pan it, scroll the preview with the mouse through KaTeX math and a saga sequence diagram, a state machine, resize the split](docs/demo.webp)
 
 - **Live.** Every keystroke re-renders. Unchanged blocks come from a cache, so long documents stay fast.
 - **Scroll sync, both ways.** The preview follows your cursor. Scrolling the preview scrolls the source.

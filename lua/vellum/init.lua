@@ -29,7 +29,7 @@ api.nvim_set_decoration_provider(ns, {
 })
 
 local function valid()
-  return S.win and api.nvim_win_is_valid(S.win) and S.src and api.nvim_buf_is_valid(S.src)
+  return S.win and api.nvim_win_is_valid(S.win) and S.src and api.nvim_buf_is_loaded(S.src)
 end
 
 -- Each side records the view it set on the other (S.top: preview topline,
@@ -163,7 +163,21 @@ function M.open()
     update()
   end)
   au('WinClosed', function() vim.schedule(M.close) end, { pattern = tostring(S.win) })
-  au('BufWipeout', function(ev) if ev.buf == S.src then vim.schedule(M.close) end end)
+  -- A preview whose source no window shows has nothing to follow, and an
+  -- unloaded source renders empty. Checked after the event, because BufEnter
+  -- may have moved the preview to the markdown buffer that replaced it.
+  au({ 'BufHidden', 'BufUnload' }, function(ev)
+    if ev.buf ~= S.src then return end
+    vim.schedule(function()
+      if S.win and (not api.nvim_buf_is_loaded(S.src) or #vim.fn.win_findbuf(S.src) == 0) then M.close() end
+    end)
+  end)
+  -- Closing the source's window must not leave the preview alone in the tab:
+  -- close it first, so :q quits the way it would without a preview.
+  au('QuitPre', function()
+    local wins = vim.tbl_filter(function(w) return api.nvim_win_get_config(w).relative == '' end, api.nvim_tabpage_list_wins(0))
+    if #wins == 2 and vim.tbl_contains(wins, S.win) and api.nvim_get_current_win() ~= S.win then M.close() end
+  end)
   draw()
 end
 

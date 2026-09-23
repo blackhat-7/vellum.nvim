@@ -359,5 +359,34 @@ do
   check('placeholder cols', vim.api.nvim_strwidth(lines[2][1][1]) == 7)
 end
 
+-- the preview closes with its source, and follows a markdown buffer that replaces it
+do
+  local vellum = require('vellum')
+  local function open()
+    vim.cmd('silent! only | enew! | silent! %bwipeout!')
+    vim.cmd('edit docs/demo.md')
+    vellum.open()
+  end
+  local function after(name, action, want)
+    action()
+    vim.wait(20)
+    check(name, (vim.fn.bufwinid('vellum://preview') ~= -1) == want)
+  end
+  open()
+  vim.cmd('vsplit README.md')
+  after('source window closed', function() vim.cmd('wincmd l') vim.cmd('quit') end, false)
+  open()
+  after('source unloaded', function() vim.cmd('bdelete') end, false)
+  open()
+  after('other markdown in the source window', function() vim.cmd('edit test/sample.md') end, true)
+  open()
+  after('non-markdown in the source window', function() vim.cmd('edit build.lua') end, false)
+  open()
+  vim.o.hidden = false
+  vim.cmd('topleft split README.md | wincmd j')
+  after('source unloaded by :q, hidden off', function() vim.cmd('quit') end, false)
+  vim.o.hidden = true
+end
+
 print(('%d checks, %d failed'):format(count, failed))
 vim.cmd(failed == 0 and 'qa!' or 'cq!')

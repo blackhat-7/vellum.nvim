@@ -31,10 +31,20 @@ local function valid()
   return S.win and api.nvim_win_is_valid(S.win) and S.src and api.nvim_buf_is_valid(S.src)
 end
 
+-- Each side records the view it set on the other (S.top: preview topline,
+-- S.view: source topline and cursor), so the scroll it causes there is not
+-- synced straight back.
+local function view(win)
+  local v = api.nvim_win_call(win, vim.fn.winsaveview)
+  return v.topline .. ':' .. v.lnum
+end
+
 -- Scroll the preview so the block under the cursor sits at the cursor's screen row.
-local function sync()
+local function sync(force)
   local win = api.nvim_get_current_win()
   if not valid() or api.nvim_win_get_buf(win) ~= S.src then return end
+  if force ~= true and view(win) == S.view then return end
+  S.view = nil
   local row, target = api.nvim_win_get_cursor(win)[1] - 1, 0
   for _, a in ipairs(S.anchors) do
     if a[1] > row then break end
@@ -43,7 +53,34 @@ local function sync()
   local screen = vim.fn.winline() - 1
   api.nvim_win_call(S.win, function()
     vim.fn.winrestview({ topline = math.max(1, target + 1 - screen), lnum = target + 1, col = 0 })
+    S.top = vim.fn.winsaveview().topline
   end)
+end
+
+-- Scroll the source so the block at the preview's top sits at the source's top.
+local function follow()
+  local win = vim.fn.bufwinid(S.src)
+  if not valid() or win == -1 then return end
+  local top = api.nvim_win_call(S.win, vim.fn.winsaveview).topline - 1
+  local target = 0
+  for _, a in ipairs(S.anchors) do
+    if a[3] > top then break end
+    target = top < a[3] + a[4] and a[1] + math.floor((top - a[3]) / a[4] * a[2]) or a[1] + a[2]
+  end
+  api.nvim_win_call(win, function()
+    -- <C-e>/<C-y> drag the cursor along; setting topline alone would not
+    local d = target + 1 - vim.fn.winsaveview().topline
+    if d ~= 0 then vim.cmd(('normal! %d%s'):format(math.abs(d), d > 0 and '\5' or '\25')) end
+  end)
+  S.view = view(win)
+end
+
+local function scrolled()
+  if vim.v.event[tostring(S.win)] and valid() and api.nvim_win_call(S.win, vim.fn.winsaveview).topline ~= S.top then
+    follow()
+  elseif vim.v.event[tostring(api.nvim_get_current_win())] then
+    sync()
+  end
 end
 
 local function draw()
@@ -54,7 +91,7 @@ local function draw()
   vim.bo[S.buf].modifiable = true
   api.nvim_buf_set_lines(S.buf, 0, -1, false, lines)
   vim.bo[S.buf].modifiable = false
-  sync()
+  sync(true)
 end
 
 -- Coalesce bursts of events into one draw on the next tick.
@@ -89,7 +126,8 @@ function M.open()
   local wo = vim.wo[S.win][0]
   wo.number, wo.relativenumber, wo.signcolumn, wo.foldcolumn, wo.statuscolumn = false, false, 'no', '0', ''
   wo.wrap, wo.list, wo.spell, wo.cursorline, wo.colorcolumn = false, false, false, false, ''
-  wo.fillchars, wo.winfixbuf = 'eob: ', true
+  -- scrolloff would move the topline sync sets, and follow() would echo it back
+  wo.fillchars, wo.winfixbuf, wo.scrolloff = 'eob: ', true, 0
   vim.keymap.set('n', 'q', M.close, { buffer = S.buf, desc = 'Close preview' })
   theme.apply()
   if image.supported and not image.problem then browser.start() end
@@ -97,9 +135,7 @@ function M.open()
   local au = function(ev, fn, opts) api.nvim_create_autocmd(ev, vim.tbl_extend('force', { group = group, callback = fn }, opts or {})) end
   au({ 'TextChanged', 'TextChangedI', 'TextChangedP' }, function(ev) if ev.buf == S.src then update() end end)
   au({ 'CursorMoved', 'CursorMovedI' }, sync)
-  -- only when the source scrolled: a mouse wheel over the preview fires this
-  -- too, from the source window, and syncing would snap the preview back
-  au('WinScrolled', function() if vim.v.event[tostring(api.nvim_get_current_win())] then sync() end end)
+  au('WinScrolled', scrolled)
   au('WinResized', resized)
   au('BufEnter', function(ev)
     if ev.buf ~= S.src and vim.bo[ev.buf].filetype == 'markdown' then

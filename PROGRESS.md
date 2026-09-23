@@ -2,7 +2,7 @@
 
 ## Where things stand
 
-Working plugin, public at github.com/blackhat-7/vellum.nvim. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor. Keystroke cost: 0.23 ms for a README, ~6.8 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings, paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists, quotes, GitHub alerts, footnotes, tables, code with syntax colors, front matter, HTML blocks, `<details>` summaries (`▾`), images (block, or inline one row high for badges), mermaid diagrams, math.
+Working plugin, public at github.com/blackhat-7/vellum.nvim. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor; scrolling the preview scrolls the source. Keystroke cost: 0.23 ms for a README, ~6.8 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings, paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists, quotes, GitHub alerts, footnotes, tables, code with syntax colors, front matter, HTML blocks, `<details>` summaries (`▾`), images (block, or inline one row high for badges), mermaid diagrams, math.
 
 Math: inline `$…$` becomes Unicode text (`latex.lua`); `$$…$$` and ```` ```math ```` become KaTeX pictures through the same headless browser as mermaid, with the text form while rendering or without kitty graphics. `$5 and $10` stays text.
 
@@ -33,3 +33,4 @@ Resizing the pane stays smooth. Math verified by eye in kitty inside tmux. `nvim
 - **Measuring redraw cost:** the UI is its own `nvim` process (the server is `nvim --embed`); its `/proc/<pid>/io` `wchar` is bytes sent to the terminal. `pgrep -f` also matches the tmux/shell wrappers.
 - **README shots come from `docs/demo.md`.** Launch kitty with `-o background_image=none -o background_opacity=1` (transparent schemes show the wallpaper). The compositor pointer lands on the headless output; patch it out.
 - **`WinScrolled` fires in the current window for any window that scrolled** (a mouse wheel over the preview). Check `v:event` for the window. `nvim -l` never fires it; test under `-c luafile` with `vim.defer_fn`.
+- **Two-way scroll sync loops unless each side ignores its own echo:** `sync` records `S.top`, `follow` records `S.view`. The preview needs `scrolloff=0`, or it shifts the topline `sync` set.

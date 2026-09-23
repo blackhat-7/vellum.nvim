@@ -67,6 +67,14 @@ local function update()
   end)
 end
 browser.on_update = update
+
+-- Dragging a split fires WinResized for every column. Re-rendering each time
+-- (and re-placing every image in the terminal) makes the drag lag, so draw
+-- once it settles.
+local settle = vim.uv.new_timer()
+local function resized()
+  if vim.tbl_contains(vim.v.event.windows, S.win) then settle:start(80, 0, vim.schedule_wrap(draw)) end
+end
 M.redraw = draw
 
 function M.setup(opts) M.config = vim.tbl_extend('force', M.config, opts or {}) end
@@ -88,7 +96,7 @@ function M.open()
   local au = function(ev, fn, opts) api.nvim_create_autocmd(ev, vim.tbl_extend('force', { group = group, callback = fn }, opts or {})) end
   au({ 'TextChanged', 'TextChangedI', 'TextChangedP' }, function(ev) if ev.buf == S.src then update() end end)
   au({ 'CursorMoved', 'CursorMovedI', 'WinScrolled' }, sync)
-  au('WinResized', update)
+  au('WinResized', resized)
   au('BufEnter', function(ev)
     if ev.buf ~= S.src and vim.bo[ev.buf].filetype == 'markdown' then
       S.src = ev.buf
@@ -113,6 +121,7 @@ end
 
 function M.close()
   api.nvim_clear_autocmds({ group = group })
+  settle:stop()
   if S.win and api.nvim_win_is_valid(S.win) then pcall(api.nvim_win_close, S.win, true) end
   S = {}
 end

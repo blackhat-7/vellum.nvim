@@ -266,8 +266,8 @@ do
   vellum.close()
 end
 
--- images: a small one stays centered at natural size, a very wide one keeps
--- readable size and scrolls sideways instead of shrinking to a smear
+-- images: a small one stays centered at natural size, a very wide one
+-- shrinks to the width (overflowing, it showed only its empty left edge)
 do
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, 'p')
@@ -288,9 +288,9 @@ do
   local widest, small = 0, nil
   for _, l in ipairs(lines) do
     widest = math.max(widest, vim.api.nvim_strwidth(l))
-    if not small and l:find(vim.fn.nr2char(0x10EEEE)) and vim.api.nvim_strwidth(l) < 84 then small = l end
+    if l:find(vim.fn.nr2char(0x10EEEE)) then small = l end -- the last image is the small one
   end
-  check('wide image scrolls', widest > 84, widest)
+  check('wide image fits the width', widest <= 84, widest)
   check('small image natural size', small and vim.api.nvim_strwidth(vim.trim(small)) == math.ceil(200 * ch / 24 / cw), small)
   local ph = vim.fn.nr2char(0x10EEEE)
   local _, row = find(badges, '^%s*CI ')

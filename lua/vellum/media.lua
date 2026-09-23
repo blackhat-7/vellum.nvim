@@ -13,11 +13,10 @@ local ROW = 24 -- CSS px per text row: 16px text in an image lands near terminal
 -- An image centered in `width`; `density` is image pixels per CSS pixel.
 function M.picture(file, pw, ph, width, density)
   local cw, ch = image.cell()
-  -- natural size first; shrink to fit, but not below 75% of it: past that,
-  -- scroll sideways like a wide table
+  -- natural size, shrunk to fit: an image wider than the pane shows only its
+  -- left edge, often empty, and scroll sync resets sideways scrolling anyway
   local natural = pw / density * ch / ROW / cw
-  local cols = math.ceil(math.min(natural, math.max(width, 0.75 * natural)))
-  cols = math.max(1, math.min(cols, image.max_cells))
+  local cols = math.max(1, math.min(math.ceil(math.min(natural, width)), image.max_cells))
   local rows = math.max(1, math.floor(cols * cw * ph / pw / ch + 0.5))
   if rows > image.max_cells then
     rows = image.max_cells

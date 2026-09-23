@@ -6,7 +6,7 @@ Working plugin, public at github.com/blackhat-7/vellum.nvim. `:Vellum` opens the
 
 Rendering is split by job: `render.lua` (blocks), `inline.lua` (inline text, wrap), `code.lua` (code panels, diagrams), `media.lua` (images). The renderer starts on `:Vellum`; the PNG cache is capped at 100 MB.
 
-Verified by eye in kitty inside tmux. `nvim --clean -l test/run.lua`: 73 checks green.
+Resizing the pane stays smooth: images fit the width and the preview redraws once a drag settles. Verified by eye in kitty inside tmux. `nvim --clean -l test/run.lua`: 73 checks green.
 
 ## What's next
 
@@ -22,6 +22,7 @@ Verified by eye in kitty inside tmux. `nvim --clean -l test/run.lua`: 73 checks 
 - **tmux needs `set -g allow-passthrough on`** for kitty graphics, and RGB in `terminal-features` for the attached TERM. Over ssh, `COLORTERM` is not forwarded, so tmux does not guess RGB.
 - **Screenshot harness can mimic ssh:** kitty `-o term=xterm-256color` and `env -u COLORTERM` before tmux.
 - **Kitty placeholders need `termguicolors`**: the image id is the fg color.
+- **Harness: start nvim after kitty attaches to tmux.** Before a client attaches, tmux reports no RGB and images are disabled.
 - **Screenshot checks:** a headless Hyprland output (`hyprctl output create headless`) plus `grim -o` captures kitty without covering the real screen. Launch kitty with `-o confirm_os_window_close=0`.
 - **`vim.fn.tempname()` + `XDG_CACHE_HOME`:** `test/run.lua` sets a private cache before requiring the plugin, because `browser.lua` prunes the cache on load.
 - **README shots come from `docs/demo.md`.** Launch kitty with `-o background_image=none -o background_opacity=1` (transparent schemes show the wallpaper). The compositor pointer lands on the headless output; patch it out.

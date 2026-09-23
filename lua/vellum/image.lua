@@ -59,7 +59,7 @@ local function detect()
 end
 detect()
 
-local sent = {}
+local sent = {} -- image id -> size of its placement, 'COLSxROWS'
 local ffi = require('ffi')
 pcall(ffi.cdef, 'struct vellum_ws { unsigned short row, col, xpixel, ypixel; }; int ioctl(int, unsigned long, ...);') -- pcall: survives a module reload
 
@@ -90,6 +90,13 @@ local function transmit(id, cols, rows, path)
   end
 end
 
+-- Re-place an image already sent at a new size. Tiny, unlike transmit():
+-- tmux drops large bursts while a pane resizes, so a resize must not re-send pixels.
+local function place(id, cols, rows)
+  send(('\27_Ga=d,d=i,i=%d,q=2\27\\'):format(id))
+  send(('\27_Ga=p,U=1,q=2,i=%d,c=%d,r=%d\27\\'):format(id, cols, rows))
+end
+
 -- Pixel size of one terminal cell.
 function M.cell()
   local ws = ffi.new('struct vellum_ws')
@@ -116,13 +123,14 @@ end
 
 -- Placeholder lines showing `path` in a cols x rows box, as segment lines.
 function M.lines(path, cols, rows)
-  local id = tonumber(vim.fn.sha256(path .. cols .. 'x' .. rows):sub(1, 6), 16)
+  local id = tonumber(vim.fn.sha256(path):sub(1, 6), 16)
   if id == 0 then id = 1 end
   local hl = 'VellumImg' .. id
   vim.api.nvim_set_hl(0, hl, { fg = id })
-  if not sent[id] then
-    sent[id] = true
-    transmit(id, cols, rows, path)
+  local size = cols .. 'x' .. rows
+  if sent[id] ~= size then
+    if sent[id] then place(id, cols, rows) else transmit(id, cols, rows, path) end
+    sent[id] = size
   end
   -- every cell names its row and column, so an image scrolled sideways
   -- (wider than the window) still draws the right slice

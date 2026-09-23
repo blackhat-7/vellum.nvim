@@ -332,7 +332,7 @@ do
   png('wide.png', 9000, 600)
   png('small.png', 200, 100)
   png('badge.png', 80, 20)
-  image.supported, image.problem = true, nil
+  image.supported, vim.o.termguicolors = true, true
   local cw, ch = image.cell()
   local lines = doc('![w](' .. dir .. '/wide.png)\n\n![s](' .. dir .. '/small.png)', 84)
   local badges = doc('CI [![ci](' .. dir .. '/badge.png)](x) <img src="' .. dir .. '/badge.png"> ok\n\nsee ![s](' .. dir .. '/small.png) below', 84)
@@ -352,11 +352,156 @@ do
   check('big image in text gets its own lines', i and badges[i + 1]:find(ph) and find(badges, '^%s*below$'), vim.inspect(badges))
 end
 
+-- images need 'termguicolors', read when used: Neovim may set it after startup
+do
+  vim.o.termguicolors = false
+  check('no termguicolors, no images', (image.problem() or ''):find('termguicolors'))
+  vim.o.termguicolors = true
+  check('termguicolors on', image.problem() == nil or image.problem():find('tmux'))
+end
+
 -- image placeholders are exactly cols wide
 do
   local lines = image.lines('/nonexistent.png', 7, 3)
   check('placeholder rows', #lines == 3)
   check('placeholder cols', vim.api.nvim_strwidth(lines[2][1][1]) == 7)
+end
+
+-- Obsidian: callouts, ==highlight==, [[wikilinks]]
+do
+  local lines = doc('> [!question]- Why *here*?\n> body line')
+  check('callout title from its line', find(lines, '󰅾  Why here%?') and find(lines, 'body line') and not find(lines, '%[!'), vim.inspect(lines))
+  lines = doc('> [!tip]\n> text')
+  check('callout without title uses its type', find(lines, '󰌶  Tip') and find(lines, 'text'), vim.inspect(lines))
+  lines = doc('> [!NOTE]\n> first\n> second')
+  check('GitHub alert unchanged', find(lines, '󰋽  Note') and find(lines, 'first second'), vim.inspect(lines))
+  lines = doc('> [!weird] x')
+  check('unknown callout stays a quote', find(lines, '%[!weird%] x'), vim.inspect(lines))
+  local l, rows = doc('a ==mark it== b, a == b == c')
+  local i = find(l, 'a mark it b, a == b == c')
+  local marked = false
+  for _, m in ipairs(i and rows[i] or {}) do marked = marked or m[3] == 'VellumMark' end
+  check('==highlight==', i and marked, vim.inspect(l))
+  lines = doc('see [[Page#Part|alias]] and [[Other#Deep bit]] and [[Plain]]')
+  check('wikilinks show their text', find(lines, 'see alias and Other › Deep bit and Plain'), vim.inspect(lines))
+end
+
+-- links keep their destination through wrapping, tables and headings, and
+-- following one from the preview opens the URL, jumps, or opens the file
+do
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, 'p')
+  -- long, so the preview has to scroll to reach the heading
+  local other = { '# Other', '' }
+  for k = 1, 150 do other[#other + 1] = 'filler ' .. k end
+  vim.list_extend(other, { '', '## Deep part', '', 'here' })
+  vim.fn.writefile(other, dir .. '/other file.md')
+  vim.fn.writefile({ '# Done' }, dir .. '/100%25 done.md')
+  vim.fn.mkdir(dir .. '/.obsidian', 'p') -- a vault: wikilinks may search its folders
+  vim.fn.mkdir(dir .. '/sub', 'p')
+  vim.fn.writefile({ '# Deeper note' }, dir .. '/sub/deeper.md')
+  vim.fn.writefile({
+    '# Top',
+    '',
+    'See [the web](https://example.com/a) and [a ref][r] and <https://auto.example>.',
+    '',
+    '| col |',
+    '| --- |',
+    '| [cell](#setup) |',
+    '',
+    '[far](other%20file.md#deep-part) [gone](missing.md) [dup](#setup-1) [[deeper]] [[nowhere]] [[other file#Deep part|wiki]] [[100%25 done]] [snake](#snake_case-option) [dash](#école--vu)',
+    '',
+    '## Setup',
+    '',
+    '## Setup',
+    '',
+    '## snake_case option',
+    '',
+    '## École — vu',
+    '',
+    '[r]: https://example.com/ref',
+  }, dir .. '/main.md')
+  local opened
+  local ui_open = vim.ui.open
+  vim.ui.open = function(t) opened = t end
+  local vellum = require('vellum')
+  vim.cmd('silent! only | enew! | silent! %bwipeout!')
+  vim.cmd.edit(dir .. '/main.md')
+  vellum.open()
+  local src = vim.api.nvim_get_current_win()
+  local pwin = vim.fn.bufwinid('vellum://preview')
+  local function click(label)
+    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(pwin), 0, -1, false)
+    for i, l in ipairs(lines) do
+      local col = l:find(label, 1, true)
+      if col then
+        vim.api.nvim_win_set_cursor(pwin, { i, col - 1 })
+        return vellum.follow()
+      end
+    end
+  end
+  check('link opens its URL', click('the web') and opened == 'https://example.com/a', opened)
+  check('reference link opens its definition', click('a ref') and opened == 'https://example.com/ref', opened)
+  check('autolink opens', click('auto.example') and opened == 'https://auto.example', opened)
+  check('link in a table cell jumps to the heading', click('cell') and vim.api.nvim_win_get_cursor(src)[1] == 11)
+  check('second heading with the same name is -1', click('dup') and vim.api.nvim_win_get_cursor(src)[1] == 13)
+  check('plain text is no link', not click('Setup'))
+  check('missing file is a message, not a jump', click('gone') and vim.api.nvim_buf_get_name(0):match('main%.md$'))
+  check('unknown wikilink is a message', click('nowhere') and vim.api.nvim_buf_get_name(0):match('main%.md$'))
+  check('wikilink finds a note in a subfolder', click('deeper') and vim.api.nvim_buf_get_name(0):match('sub/deeper%.md$'))
+  vim.cmd.edit(dir .. '/main.md')
+  vim.wait(50)
+  check('wikilink opens the note at its heading', click('wiki') and vim.api.nvim_buf_get_name(0):match('other file%.md$')
+    and vim.api.nvim_win_get_cursor(src)[1] == #other - 2)
+  vim.cmd.edit(dir .. '/main.md')
+  vim.wait(50)
+  check('wikilink name is a file name, not a URL', click('100%25 done') and vim.api.nvim_buf_get_name(0):match('100%%25 done%.md$'))
+  vim.cmd.edit(dir .. '/main.md')
+  vim.wait(50)
+  check('anchor keeps underscores', click('snake') and vim.api.nvim_get_current_line() == '## snake_case option')
+  check('anchor: letters kept, a dash dropped, as GitHub', click('dash') and vim.api.nvim_get_current_line() == '## École — vu')
+  vim.cmd.edit(dir .. '/main.md')
+  vim.wait(50)
+  check('relative markdown file opens at its heading', click('far') and vim.api.nvim_buf_get_name(0):match('other file%.md$')
+    and vim.api.nvim_win_get_cursor(src)[1] == #other - 2)
+  local plines = vim.api.nvim_buf_get_lines(vim.fn.winbufnr(pwin), 0, -1, false)
+  local at = find(plines, 'Deep part')
+  check('the preview shows the opened file at the heading', at and vim.fn.line('w0', pwin) <= at and at <= vim.fn.line('w$', pwin),
+    at and ('heading at %d, view %d-%d'):format(at, vim.fn.line('w0', pwin), vim.fn.line('w$', pwin)))
+  -- outside a vault only the note's own folder is looked in
+  local loose = vim.fn.tempname()
+  vim.fn.mkdir(loose .. '/sub', 'p')
+  vim.fn.writefile({ '# Deeper' }, loose .. '/sub/deeper.md')
+  vim.fn.writefile({ '[[deeper]]' }, loose .. '/main.md')
+  vim.cmd.edit(loose .. '/main.md')
+  vim.wait(50)
+  check('no vault, no folder search', click('deeper') and vim.api.nvim_buf_get_name(0):match('main%.md$'))
+  vim.ui.open = ui_open
+  -- a link wrapped over two lines keeps its target on both
+  local wrapped = require('vellum.inline').wrap(require('vellum.inline').parse('[one two three four](x.md)'), 9)
+  local all = #wrapped > 1
+  for _, l in ipairs(wrapped) do all = all and l[1].link == 'x.md' end
+  check('wrapped link keeps its target on every line', all, vim.inspect(wrapped))
+end
+
+-- export refuses what it cannot do, with a message (the rendering itself needs Chrome)
+do
+  local said
+  local notify = vim.notify
+  vim.notify = function(m) said = m end
+  vim.cmd('silent! only | enew! | silent! %bwipeout!')
+  vim.cmd('edit build.lua')
+  require('vellum').export()
+  check('export needs markdown', said and said:find('markdown buffer'), said)
+  vim.cmd('edit docs/demo.md')
+  said = nil
+  require('vellum').export('out.docx')
+  check('export needs .pdf or .html', said and said:find('%.pdf or %.html'), said)
+  said = nil
+  vim.cmd('runtime plugin/vellum.lua') -- nvim -l loads no plugin files
+  vim.cmd('Vellum nonsense')
+  check('unknown subcommand', said and said:find('unknown command'), said)
+  vim.notify = notify
 end
 
 -- the preview closes with its source, and follows a markdown buffer that replaces it

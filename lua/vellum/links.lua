@@ -1,0 +1,99 @@
+-- Following a link from the preview: URLs open in the browser, "#anchor"
+-- jumps to the heading, a markdown file opens in the source window.
+local M = {}
+
+local function trim_label(s) return vim.trim(s:lower():gsub('%s+', ' ')) end
+
+-- The destination of reference link `label` in `buf`, or nil.
+local function definition(buf, label)
+  local root = vim.treesitter.get_parser(buf, 'markdown'):parse()[1]:root()
+  local query = vim.treesitter.query.parse('markdown', '(link_reference_definition (link_label) @label (link_destination) @dest)')
+  local want, found = trim_label(label)
+  for _, match in query:iter_matches(root, buf, 0, -1) do
+    local l = vim.treesitter.get_node_text(match[1][1], buf)
+    if trim_label(l:sub(2, -2)) == want then found = found or vim.treesitter.get_node_text(match[2][1], buf) end
+  end
+  return found and (found:match('^<(.*)>$') or found)
+end
+
+-- GitHub's heading id: lowercase; letters, digits, "-", "_" kept, other
+-- punctuation, symbols and emoji dropped; spaces to dashes. Markup (**, `)
+-- is not part of the shown text. Exports use the same rule (browser.mjs).
+local function slug(text)
+  local id = {}
+  for ch in vim.fn.tolower((text:gsub('[*`]', ''))):gmatch('[%z\1-\127\194-\244][\128-\191]*') do
+    local class = #ch > 1 and vim.fn.charclass(ch) -- 1 punctuation, 3 emoji, 2 or a script number: a letter
+    if (class and class ~= 1 and class ~= 3) or (not class and ch:match('[%w%-_ ]')) then id[#id + 1] = ch == ' ' and '-' or ch end
+  end
+  return table.concat(id)
+end
+
+-- The file and heading id an Obsidian [[note#heading]] points to, or nil.
+-- A note is found next to `buf`, else anywhere in its vault: the folder
+-- holding .obsidian. Outside a vault there is nothing sensible to search,
+-- and searching all of $HOME for a typo would freeze the editor.
+local function wiki(buf, note)
+  local name, heading_text = note:match('^([^#]*)#?(.*)$')
+  local anchor = slug(heading_text)
+  if name == '' then return '', anchor end
+  if not name:lower():match('%.%w+$') then name = name .. '.md' end
+  local dir = vim.fs.dirname(vim.api.nvim_buf_get_name(buf))
+  if vim.uv.fs_stat(dir .. '/' .. name) then return dir .. '/' .. name, anchor end
+  local vault = vim.fs.root(buf, '.obsidian')
+  local found = vault and vim.fs.find(function(n, path)
+    return (path .. '/' .. n):sub(-#name - 1) == '/' .. name
+  end, { path = vault, type = 'file', limit = 1 })[1]
+  if found then return found, anchor end
+end
+
+-- 0-based row of the heading `anchor` points to in `buf`, or nil. Repeated
+-- headings get "-1", "-2", … like on GitHub.
+local function heading(buf, anchor)
+  local root = vim.treesitter.get_parser(buf, 'markdown'):parse()[1]:root()
+  local query = vim.treesitter.query.parse('markdown', '[(atx_heading (inline) @text) (setext_heading (paragraph) @text)]')
+  local seen = {}
+  for _, node in query:iter_captures(root, buf, 0, -1) do
+    local s = slug(vim.trim((vim.treesitter.get_node_text(node, buf):gsub('%s*#+%s*$', ''))))
+    local id = seen[s] and s .. '-' .. seen[s] or s
+    seen[s] = (seen[s] or 0) + 1
+    if id == anchor:lower() then return (node:start()) end
+  end
+end
+
+-- Follow `link` (a destination, { ref = label } or { wiki = note }) found in
+-- `buf`, shown in window `win`. Returns an error message, or nil.
+function M.follow(link, buf, win)
+  local path, anchor
+  if type(link) == 'table' and link.wiki then
+    path, anchor = wiki(buf, link.wiki)
+    if not path then return 'no note named ' .. link.wiki end
+  else
+    local target = link
+    if type(link) == 'table' then
+      target = definition(buf, link.ref)
+      if not target then return 'no definition for [' .. link.ref .. ']' end
+    end
+    if target == '' then return 'link has no destination' end
+    if target:match('^%a[%w+.-]*:') then return select(2, vim.ui.open(target)) end
+    path, anchor = target:match('^([^#]*)#?(.*)$')
+    path, anchor = vim.uri_decode(path), vim.uri_decode(anchor)
+    if path ~= '' and path:sub(1, 1) ~= '/' then path = vim.fs.dirname(vim.api.nvim_buf_get_name(buf)) .. '/' .. path end
+  end
+  if path ~= '' then
+    path = vim.fs.normalize(path)
+    if not vim.uv.fs_stat(path) then return 'no such file: ' .. path end
+    if not path:lower():match('%.md$') and not path:lower():match('%.markdown$') then return select(2, vim.ui.open(path)) end
+    local ok, err = pcall(vim.api.nvim_win_call, win, function() vim.cmd.edit(vim.fn.fnameescape(path)) end)
+    if not ok then return (tostring(err):gsub('^.-(E%d+:)', '%1')) end
+    buf = vim.api.nvim_win_get_buf(win)
+  end
+  if anchor == '' then return end
+  local row = heading(buf, anchor)
+  if not row then return 'no heading #' .. anchor end
+  vim.api.nvim_win_call(win, function()
+    vim.api.nvim_win_set_cursor(win, { row + 1, 0 })
+    vim.cmd('normal! zt')
+  end)
+end
+
+return M

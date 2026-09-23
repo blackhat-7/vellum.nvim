@@ -24,3 +24,8 @@ Each line carries its own done-check.
 - [x] Math: inline `$…$` as Unicode text, `$$…$$` and ```` ```math ```` as KaTeX pictures; `$5 and $10` stays literal. Done: tests on symbols, scripts, fractions, environments, dollars; KaTeX seen in kitty.
 - [x] Zoom an image: `<CR>` in the preview (or `require('vellum').zoom()`) opens it full-screen; `+`/`-`/`0`/`hjkl`/`q`. Done: zoom, pan, cap and close seen in kitty + tmux on `docs/demo.md`.
 - [x] README demo on `docs/showcase.md` (large architecture, saga and state diagrams, KaTeX math, alerts, tables, lists): open, live diagram edit, zoom + pan, mouse scroll, resize. `docs/demo.webp`, 37 s, 4.7 MB. Done: checked frame by frame.
+- [x] `:checkhealth vellum` and a notice when images can't show (terminal, termguicolors, tmux RGB/passthrough). Done: checked in tmux with each failure.
+- [x] Renderer restarts after Chrome or node crash; waiting renders are resent. Done: killed both mid-render with the real renderer.
+- [x] Follow links from the preview (`gx`/`<CR>`): URLs, `#anchors`, relative `.md` files, reference links. Done: 10 checks driving a real preview.
+- [x] Obsidian: callouts, `==highlight==`, `[[wikilinks]]`. Done: checks + kitty look; 600-file sweep unchanged vs main.
+- [x] `:Vellum export [file.pdf|file.html]`. Done: showcase + edge-case docs exported and checked page by page.

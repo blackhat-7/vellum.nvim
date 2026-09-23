@@ -46,11 +46,21 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 lazy runs `build.lua` on install. It installs the diagram renderer: `npm ci` and a small headless Chrome download.
 
+If diagrams don't show, run `:checkhealth vellum`. It checks Node, renders a test diagram, and says what your terminal or tmux setup is missing.
+
 ## Use
 
 `:Vellum` toggles the preview. It also closes once no window shows the markdown file.
 
-In the preview, `q` closes it and `<CR>` on a diagram or image opens it full-screen. There:
+`:Vellum export` writes the markdown buffer to a PDF beside it. `:Vellum export notes.html` writes a self-contained HTML file instead. Exports are light, like GitHub, with diagrams, math, alerts and footnotes, and `<details>` blocks opened.
+
+In the preview:
+
+- `gx` or `<CR>` on a link follows it. Web links open in your browser, `#heading` links jump to the heading, and links to other markdown files open them in the source window (the preview follows). Other files open in their default app.
+- `<CR>` on a diagram or image opens it full-screen.
+- `q` closes the preview.
+
+Full-screen:
 
 - `+` / `-` zoom. Ctrl+wheel zooms toward the mouse pointer.
 - `hjkl`, the arrow keys or the mouse wheel pan.
@@ -79,6 +89,7 @@ require('vellum').setup({
 | Emphasis, strike, `code`, links, bare URLs | styled inline |
 | Lists, task lists, ordered lists | bullets per depth, checkboxes |
 | Quotes and `> [!NOTE]` alerts | colored bar and title |
+| Obsidian callouts (`> [!question]- Title`), `==highlight==`, `[[wikilinks]]` | callout colors and titles, marked text, links you can follow |
 | Tables | aligned, wrapped to fit, zebra rows |
 | Fenced code | tree-sitter syntax colors, language label |
 | ` ```mermaid ` | image (text fallback outside kitty/Ghostty) |

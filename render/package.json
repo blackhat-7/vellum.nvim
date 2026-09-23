@@ -4,6 +4,8 @@
   "type": "module",
   "dependencies": {
     "katex": "^0.16.47",
+    "marked": "^18.0.14",
+    "marked-footnote": "^1.4.0",
     "mermaid": "^12.0.0",
     "puppeteer": "^25.11.0"
   }

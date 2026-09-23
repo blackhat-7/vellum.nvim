@@ -76,7 +76,13 @@ local function follow()
 end
 
 local function scrolled()
-  if vim.v.event[tostring(S.win)] and valid() and api.nvim_win_call(S.win, vim.fn.winsaveview).topline ~= S.top then
+  local mine = vim.v.event[tostring(S.win)] and valid()
+  -- Lines already fit the width, and a sideways shift hides the image cells
+  -- that carry the placement diacritics, so kitty garbles every row.
+  if mine and vim.v.event[tostring(S.win)].leftcol ~= 0 then
+    api.nvim_win_call(S.win, function() vim.fn.winrestview({ leftcol = 0 }) end)
+  end
+  if mine and api.nvim_win_call(S.win, vim.fn.winsaveview).topline ~= S.top then
     follow()
   elseif vim.v.event[tostring(api.nvim_get_current_win())] then
     sync()

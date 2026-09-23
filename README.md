@@ -48,6 +48,8 @@ lazy runs `build.lua` on install. It installs the diagram renderer: `npm ci` and
 
 `:Vellum` toggles the preview. `q` in the preview closes it.
 
+`<CR>` on a diagram or image in the preview opens it full-screen: `+`/`-` zoom, `hjkl` pan, `0` fits, `q` closes. To zoom from the markdown buffer, map `require('vellum').zoom()`; it opens the image beside your cursor.
+
 Options (the defaults):
 
 ```lua

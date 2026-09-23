@@ -22,3 +22,4 @@ Each line carries its own done-check.
 - [x] Editing a diagram shows the final version fast: stale queued renders are cancelled. Done: 13 keys typed into a large flowchart, final image 3.6 s → 0.34 s after the last key (headless, real renderer).
 - [x] README demo re-shot on a long architecture doc with four large diagrams (`docs/demo.webp`). Done: checked frame by frame; found and fixed the stale-render queue and the per-session cache miss on the way.
 - [x] Math: inline `$…$` as Unicode text, `$$…$$` and ```` ```math ```` as KaTeX pictures; `$5 and $10` stays literal. Done: tests on symbols, scripts, fractions, environments, dollars; KaTeX seen in kitty.
+- [x] Zoom an image: `<CR>` in the preview (or `require('vellum').zoom()`) opens it full-screen; `+`/`-`/`0`/`hjkl`/`q`. Done: zoom, pan, cap and close seen in kitty + tmux on `docs/demo.md`.

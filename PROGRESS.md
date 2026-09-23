@@ -2,13 +2,13 @@
 
 ## Where things stand
 
-Working plugin, public at github.com/blackhat-7/vellum.nvim. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor; scrolling the preview scrolls the source. Keystroke cost: 0.23 ms for a README, ~6.8 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings, paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists, quotes, GitHub alerts, footnotes, tables, code with syntax colors, front matter, HTML blocks, `<details>` summaries (`▾`), images (block, or inline one row high for badges), mermaid diagrams, math.
+Working plugin, public at github.com/blackhat-7/vellum.nvim. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor; scrolling the preview scrolls the source. `<CR>` on an image in the preview opens it full-screen (`zoom.lua`): `+`/`-` zoom, `hjkl` pan. Keystroke cost: 0.23 ms for a README, ~6.8 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings, paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists, quotes, GitHub alerts, footnotes, tables, code with syntax colors, front matter, HTML blocks, `<details>` summaries (`▾`), images (block, or inline one row high for badges), mermaid diagrams, math.
 
 Math: inline `$…$` becomes Unicode text (`latex.lua`); `$$…$$` and ```` ```math ```` become KaTeX pictures through the same headless browser as mermaid, with the text form while rendering or without kitty graphics. `$5 and $10` stays text.
 
 Rendering is split by job: `render.lua` (blocks), `inline.lua` (inline text, wrap), `code.lua` (code panels, diagrams), `media.lua` (images), `latex.lua` (math). The renderer starts on `:Vellum`; the PNG cache is capped at 100 MB.
 
-Resizing the pane stays smooth. Math verified by eye in kitty inside tmux. `nvim --clean -l test/run.lua`: 108 checks green.
+Resizing the pane stays smooth. Math verified by eye in kitty inside tmux. Zoom checked in kitty + tmux. `nvim --clean -l test/run.lua`: 109 checks green.
 
 ## What's next
 
@@ -35,3 +35,4 @@ Resizing the pane stays smooth. Math verified by eye in kitty inside tmux. `nvim
 - **`WinScrolled` fires in the current window for any window that scrolled** (a mouse wheel over the preview). Check `v:event` for the window. `nvim -l` never fires it; test under `-c luafile` with `vim.defer_fn`.
 - **Two-way scroll sync loops unless each side ignores its own echo:** `sync` records `S.top`, `follow` records `S.view`. The preview needs `scrolloff=0`, or it shifts the topline `sync` set.
 - **The preview must never scroll sideways.** Image rows carry kitty diacritics on their first cell only; shift it off and every row shows row 0. `scrolled()` pins `leftcol` to 0. Headless never fires `WinScrolled`; check it in tmux.
+- **Kitty ignores the source rectangle (`x,y,w,h`) on placeholder placements.** The zoom viewer crops by naming cells instead, so zoom stops where the image reaches 297 cells on a side.

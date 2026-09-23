@@ -121,12 +121,20 @@ function M.png_size(path)
   return u32(17), u32(21)
 end
 
--- Placeholder lines showing `path` in a cols x rows box, as segment lines.
-function M.lines(path, cols, rows)
-  local id = tonumber(vim.fn.sha256(path):sub(1, 6), 16)
-  if id == 0 then id = 1 end
+M.paths = {} -- image id -> PNG path, to find the file behind a placeholder
+
+-- Terminal image id for `key`. Ids are 24-bit: the placeholder's fg color.
+function M.id(key)
+  local id = tonumber(vim.fn.sha256(key):sub(1, 6), 16)
+  return id == 0 and 1 or id
+end
+
+-- Placeholder lines showing rows r0..r0+nr-1 and columns c0..c0+nc-1 (from 0)
+-- of `path` placed in a cols x rows box as image `id`, as segment lines.
+function M.grid(id, path, cols, rows, r0, c0, nr, nc)
   local hl = 'VellumImg' .. id
   vim.api.nvim_set_hl(0, hl, { fg = id })
+  M.paths[id] = path
   local size = cols .. 'x' .. rows
   if sent[id] ~= size then
     if sent[id] then place(id, cols, rows) else transmit(id, cols, rows, path) end
@@ -135,12 +143,21 @@ function M.lines(path, cols, rows)
   -- only a row's first cell names its row and column; kitty gives each
   -- bare cell after it the next column. Full marks on every cell more than
   -- doubled the bytes of every redraw, which lags over ssh.
-  local rest = PLACEHOLDER:rep(cols - 1)
+  local rest = PLACEHOLDER:rep(nc - 1)
   local out = {}
-  for r = 1, rows do
-    out[r] = { { PLACEHOLDER .. vim.fn.nr2char(DIACRITICS[r]) .. vim.fn.nr2char(DIACRITICS[1]) .. rest, hl } }
+  for r = 1, nr do
+    out[r] = { { PLACEHOLDER .. vim.fn.nr2char(DIACRITICS[r0 + r]) .. vim.fn.nr2char(DIACRITICS[c0 + 1]) .. rest, hl } }
   end
   return out
+end
+
+-- Placeholder lines showing `path` in a cols x rows box, as segment lines.
+function M.lines(path, cols, rows) return M.grid(M.id(path), path, cols, rows, 0, 0, rows, cols) end
+
+-- Free image `id`'s pixels in the terminal.
+function M.drop(id)
+  send(('\27_Ga=d,d=I,i=%d,q=2\27\\'):format(id))
+  sent[id] = nil
 end
 
 return M

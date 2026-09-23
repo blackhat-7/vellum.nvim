@@ -4,6 +4,7 @@ local render = require('vellum.render')
 local theme = require('vellum.theme')
 local image = require('vellum.image')
 local browser = require('vellum.browser')
+local zoom = require('vellum.zoom')
 
 local api = vim.api
 local M = {}
@@ -135,6 +136,7 @@ function M.open()
   -- scrolloff would move the topline sync sets, and follow() would echo it back
   wo.fillchars, wo.winfixbuf, wo.scrolloff = 'eob: ', true, 0
   vim.keymap.set('n', 'q', M.close, { buffer = S.buf, desc = 'Close preview' })
+  vim.keymap.set('n', '<CR>', M.zoom, { buffer = S.buf, desc = 'Zoom the image' })
   theme.apply()
   if image.supported and not image.problem then browser.start() end
 
@@ -170,6 +172,17 @@ function M.close()
   settle:stop()
   if S.win and api.nvim_win_is_valid(S.win) then pcall(api.nvim_win_close, S.win, true) end
   S = {}
+end
+
+-- Open the image on the preview's cursor line full-screen. That line follows
+-- the source cursor, so this works from either window.
+function M.zoom()
+  if not valid() then return end
+  for _, m in ipairs(S.rows[api.nvim_win_get_cursor(S.win)[1]] or {}) do
+    local id = tonumber(m[3]:match('Img(%d+)'))
+    if id and image.paths[id] then return zoom.open(image.paths[id]) end
+  end
+  vim.notify('vellum: no image on this line', vim.log.levels.INFO)
 end
 
 function M.toggle()

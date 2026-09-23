@@ -2,7 +2,7 @@
 
 A live markdown preview that renders beside your buffer, inside the terminal. GitHub-flavored markdown, with mermaid diagrams as real images.
 
-![vellum.nvim in action: open the preview, scroll through it, type a new section and a mermaid diagram, resize the split](docs/demo.gif)
+![vellum.nvim on a long architecture doc: open the preview, edit a diagram label live, scroll through four large mermaid diagrams, resize the split](docs/demo.webp)
 
 - **Live.** Every keystroke re-renders. Unchanged blocks come from a cache, so it stays instant on long documents.
 - **Follows you.** The preview scrolls with your cursor.

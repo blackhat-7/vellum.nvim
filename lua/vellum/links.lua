@@ -60,20 +60,14 @@ function M.follow(link, buf, win)
     if not target then return link.wiki and 'no note named ' .. link.wiki or 'no definition for [' .. link.ref .. ']' end
   end
   if target == '' then return 'link has no destination' end
-  if target:match('^%a[%w+.-]*:') then
-    vim.ui.open(target)
-    return
-  end
+  if target:match('^%a[%w+.-]*:') then return select(2, vim.ui.open(target)) end
   local path, anchor = target:match('^([^#]*)#?(.*)$')
   if path ~= '' then
     path = vim.uri_decode(path)
     if path:sub(1, 1) ~= '/' then path = vim.fs.dirname(vim.api.nvim_buf_get_name(buf)) .. '/' .. path end
     path = vim.fs.normalize(path)
     if not vim.uv.fs_stat(path) then return 'no such file: ' .. path end
-    if not path:lower():match('%.md$') and not path:lower():match('%.markdown$') then
-      vim.ui.open(path)
-      return
-    end
+    if not path:lower():match('%.md$') and not path:lower():match('%.markdown$') then return select(2, vim.ui.open(path)) end
     local ok, err = pcall(vim.api.nvim_win_call, win, function() vim.cmd.edit(vim.fn.fnameescape(path)) end)
     if not ok then return (tostring(err):gsub('^.-(E%d+:)', '%1')) end
     buf = vim.api.nvim_win_get_buf(win)

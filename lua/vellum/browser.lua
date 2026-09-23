@@ -134,6 +134,7 @@ end
 -- Write `markdown`, whose relative links resolve in `dir`, to `out`: a .pdf
 -- or .html file. Calls done(error) when finished; error is nil on success.
 function M.export(markdown, dir, out, done)
+  if exports[out] then return done('already exporting to ' .. out) end
   local err = M.start()
   if err then return done(err) end
   exports[out] = done

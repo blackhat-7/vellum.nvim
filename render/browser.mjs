@@ -2,19 +2,19 @@
 //   {"out": "/abs/file.png", "code": "...", "theme": {...}}   a mermaid diagram
 //   {"out": "/abs/file.png", "image": "/abs/path or https://..."}   any image the browser can show
 //   {"out": "/abs/file.png", "math": "\\frac{a}{b}", "color": "#rrggbb"}   display math, by KaTeX
-//   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir"}   a document export
+//   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir", "kinds": {...}}   a document export
 // and answers one JSON line: {"out"} when the PNG is written, or {"out", "error"}.
 // A real browser renders exactly what GitHub renders; a fake DOM mis-measures
 // text and breaks class and gantt diagrams.
 import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join } from 'node:path';
+import { dirname, extname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer';
 
 const SCALE = 2; // device pixels per CSS px; kitty downsamples, so text stays crisp
-const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.avif': 'image/avif' };
+const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.avif': 'image/avif' };
 
 const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox'] }).catch((e) => {
   // one short last line: the plugin shows it in place of each diagram
@@ -182,7 +182,7 @@ img, .mermaid svg { max-width: 100%; }
 pre, table, img, .mermaid, .katex-display { break-inside: avoid; }
 `;
 
-async function exportDoc({ markdown: text, dir, out }) {
+async function exportDoc({ markdown: text, dir, out, kinds }) {
   markdown ??= await exporter().catch((e) => {
     throw new Error('export needs a rebuilt renderer (:Lazy build vellum.nvim): ' + e.message);
   });
@@ -194,15 +194,8 @@ async function exportDoc({ markdown: text, dir, out }) {
   try {
     await doc.goto(pathToFileURL(tmp).href, { waitUntil: 'load' });
     await doc.addScriptTag({ path: fileURLToPath(import.meta.resolve('mermaid/dist/mermaid.min.js')) });
-    await doc.evaluate(async () => {
-      // alert and callout colors, as in the preview (render.lua ALERTS)
-      const kinds = {
-        note: 'note', info: 'note', todo: 'note', abstract: 'note', summary: 'note', tldr: 'note', quote: 'note', cite: 'note',
-        tip: 'tip', hint: 'tip', success: 'tip', check: 'tip', done: 'tip',
-        important: 'important', question: 'important', help: 'important', faq: 'important', example: 'important',
-        warning: 'warning', attention: 'warning',
-        caution: 'caution', danger: 'caution', error: 'caution', failure: 'caution', fail: 'caution', missing: 'caution', bug: 'caution',
-      };
+    await doc.evaluate(async (kinds) => {
+      // callout types and colors come from the preview (render.lua ALERTS)
       for (const q of document.querySelectorAll('blockquote')) {
         const p = q.firstElementChild;
         const m = p?.tagName === 'P' && /^\[!(\w+)\][+-]?[ \t]*([^\n]*)\n?/.exec(p.innerHTML);
@@ -212,6 +205,13 @@ async function exportDoc({ markdown: text, dir, out }) {
         if (!p.innerHTML.trim()) p.remove();
         const title = m[2] || m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
         q.insertAdjacentHTML('afterbegin', `<p class="title">${title}</p>`);
+      }
+      // GitHub's heading ids, so "#heading" links work (links.lua slug)
+      const seen = {};
+      for (const h of document.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+        const id = h.textContent.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/ /g, '-');
+        h.id = seen[id] ? `${id}-${seen[id]}` : id;
+        seen[id] = (seen[id] ?? 0) + 1;
       }
       // a printed page cannot be clicked open
       for (const d of document.querySelectorAll('details')) d.open = true;
@@ -229,15 +229,31 @@ async function exportDoc({ markdown: text, dir, out }) {
         }
       }
       await document.fonts.ready;
-    });
+    }, kinds);
     if (out.endsWith('.pdf')) {
       await doc.pdf({ path: out, format: 'A4', printBackground: true, margin: { top: '12mm', bottom: '12mm', left: '10mm', right: '10mm' } });
     } else {
-      // relative links and images then resolve next to the saved file
-      const html = await doc.evaluate(() => {
+      // local images go in as data, so the file stands alone; links stay
+      // relative beside the source, and elsewhere point back at it
+      const images = await doc.evaluate(() => [...document.images].map((i) => i.src).filter((s) => s.startsWith('file:')));
+      const data = {};
+      for (const url of images) {
+        try {
+          const file = fileURLToPath(url);
+          data[url] = `data:${MIME[extname(file).toLowerCase()] ?? 'application/octet-stream'};base64,${readFileSync(file).toString('base64')}`;
+        } catch {} // a missing image stays a broken link, as in the browser
+      }
+      const html = await doc.evaluate((data, beside) => {
+        for (const img of document.images) if (data[img.src]) img.src = data[img.src];
+        if (!beside) {
+          for (const a of document.querySelectorAll('a[href]')) {
+            const href = a.getAttribute('href');
+            if (!href.startsWith('#') && !/^[a-z][\w+.-]*:/i.test(href)) a.href = a.href;
+          }
+        }
         document.querySelectorAll('base, script').forEach((e) => e.remove());
         return '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-      });
+      }, data, resolve(dirname(out)) === resolve(dir));
       writeFileSync(out, html);
     }
     return { out };

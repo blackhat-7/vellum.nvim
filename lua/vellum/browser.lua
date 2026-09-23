@@ -131,14 +131,15 @@ function M.drop_stale()
   wanted = {}
 end
 
--- Write `markdown`, whose relative links resolve in `dir`, to `out`: a .pdf
--- or .html file. Calls done(error) when finished; error is nil on success.
-function M.export(markdown, dir, out, done)
-  if exports[out] then return done('already exporting to ' .. out) end
+-- Write req.markdown, whose relative links resolve in req.dir, to req.out: a
+-- .pdf or .html file. req.kinds maps callout types to colors. Calls
+-- done(error) when finished; error is nil on success.
+function M.export(req, done)
+  if exports[req.out] then return done('already exporting to ' .. req.out) end
   local err = M.start()
   if err then return done(err) end
-  exports[out] = done
-  job:write(vim.json.encode({ markdown = markdown, dir = dir, out = out }) .. '\n')
+  exports[req.out] = done
+  job:write(vim.json.encode(req) .. '\n')
 end
 
 function M.diagram(code, theme)

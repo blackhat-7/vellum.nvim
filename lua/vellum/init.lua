@@ -251,7 +251,9 @@ function M.export(path)
   vim.notify('vellum: exporting to ' .. path .. ' …')
   local text = table.concat(api.nvim_buf_get_lines(buf, 0, -1, false), '\n')
   local dir = name ~= '' and vim.fs.dirname(vim.fn.fnamemodify(name, ':p')) or vim.fn.getcwd()
-  browser.export(text, dir, path, function(err)
+  local kinds = {} -- callout type → its color, as in the preview
+  for kind, a in pairs(render.alerts) do kinds[kind:lower()] = a[2]:lower() end
+  browser.export({ markdown = text, dir = dir, out = path, kinds = kinds }, function(err)
     if err then
       vim.notify('vellum: export failed: ' .. err, vim.log.levels.ERROR)
     else

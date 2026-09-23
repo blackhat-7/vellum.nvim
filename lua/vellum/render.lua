@@ -233,6 +233,7 @@ for kind, like in pairs({
 }) do
   ALERTS[kind] = { ALERTS[like][1], ALERTS[like][2], kind:sub(1, 1) .. kind:sub(2):lower() }
 end
+M.alerts = ALERTS -- exports color callouts the same way
 
 function R.block_quote(node, width)
   local body, head, alert = kids(node, '^block_quote_marker$'), {}, nil

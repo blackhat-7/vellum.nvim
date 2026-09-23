@@ -100,7 +100,8 @@ function M.apply()
       M.mermaid['gitBranchLabel' .. i] = hex(bg)
     end
   end
-  M.signature = vim.json.encode(M.mermaid)
+  -- sorted: table order changes between sessions, and this is part of the disk cache key
+  M.signature = vim.json.encode(M.mermaid, { sort_keys = true })
 end
 
 -- One highlight group combining `groups` in order, later ones winning.

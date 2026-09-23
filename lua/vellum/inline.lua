@@ -74,7 +74,8 @@ function M.parse(text, hl)
   local function formula(src, after, hls)
     local n = #src:match('^%$*')
     local body = src:sub(n + 1, -n - 1)
-    local ok = n <= 2 and #src > 2 * n and src:sub(-n) == ('$'):rep(n) and body:match('%S')
+    -- a closing HTML tag means the dollars sit in different tags: "<code>$</code> … <code>$</code>"
+    local ok = n <= 2 and #src > 2 * n and src:sub(-n) == ('$'):rep(n) and body:match('%S') and not body:find('</%a')
     if n == 1 then
       ok = ok and not body:match('^%s') and not body:match('%s$') and not after:match('%d')
       body = body:match('^`(.*)`$') or body -- GitHub's $`…`$ form

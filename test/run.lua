@@ -208,6 +208,8 @@ do
     and find(lines, 'Text before$') and find(lines, '^%s*after$'), vim.inspect(lines))
   check('math fence', has(doc('```math\nx^2\n```'), 'x²'))
   check('markdown inside a non-math $ span', has(doc('Pay $5 to [site](http://x) and $10.'), 'Pay $5 to site and $10.'))
+  check('dollars in separate html tags are text', has(doc('Use <code>$\\`</code> and <code>\\`$</code> here.'), 'Use $` and `$ here.'),
+    vim.inspect(doc('Use <code>$\\`</code> and <code>\\`$</code> here.')))
   check('nested scripts stay nested', latex.text('a^{b^{c}}') == 'a^(bᶜ)', latex.text('a^{b^{c}}'))
   check('NUL in a script', pcall(doc, 'a $x^{a\0b}$ c'))
   check('deep nesting shows the source', latex.text(('{'):rep(10000)) == ('{'):rep(10000))

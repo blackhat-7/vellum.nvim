@@ -132,16 +132,13 @@ function M.lines(path, cols, rows)
     if sent[id] then place(id, cols, rows) else transmit(id, cols, rows, path) end
     sent[id] = size
   end
-  -- every cell names its row and column, so an image scrolled sideways
-  -- (wider than the window) still draws the right slice
-  local col = {}
-  for c = 1, cols do col[c] = vim.fn.nr2char(DIACRITICS[c]) end
+  -- only a row's first cell names its row and column; kitty gives each
+  -- bare cell after it the next column. Full marks on every cell more than
+  -- doubled the bytes of every redraw, which lags over ssh.
+  local rest = PLACEHOLDER:rep(cols - 1)
   local out = {}
   for r = 1, rows do
-    local cell = PLACEHOLDER .. vim.fn.nr2char(DIACRITICS[r])
-    local parts = {}
-    for c = 1, cols do parts[c] = cell .. col[c] end
-    out[r] = { { table.concat(parts), hl } }
+    out[r] = { { PLACEHOLDER .. vim.fn.nr2char(DIACRITICS[r]) .. vim.fn.nr2char(DIACRITICS[1]) .. rest, hl } }
   end
   return out
 end

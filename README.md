@@ -1,13 +1,15 @@
 # vellum.nvim
 
-A live markdown preview that renders beside your buffer, inside the terminal. GitHub-flavored markdown, with mermaid diagrams as real images.
+A markdown preview for Neovim. It renders in a split beside your buffer, inside the terminal. GitHub-flavored markdown, with mermaid diagrams and display math as real images.
 
-![vellum.nvim on a long architecture doc: open the preview, edit a diagram label live, scroll through four large mermaid diagrams, resize the split](docs/demo.webp)
+![Demo: open the preview, scroll, edit a diagram label and watch it redraw, scroll past math and a sequence diagram, scroll the preview with the mouse, zoom into a diagram, resize the split](docs/demo.webp)
 
-- **Live.** Every keystroke re-renders. Unchanged blocks come from a cache, so it stays instant on long documents.
-- **Follows you.** The preview scrolls with your cursor.
-- **Looks like a document.** Heading bands with gradient edges, syntax-highlighted code panels, rounded tables with zebra rows, GitHub alerts, task lists, `<details>` blocks. Badges sit inline, like on GitHub. The colors come from your colorscheme.
-- **Real diagrams.** Mermaid renders in a headless browser, exactly like GitHub, sized to match your terminal font. Each diagram renders once and is cached on disk (capped at 100 MB).
+- **Live.** Every keystroke re-renders. Unchanged blocks come from a cache, so long documents stay fast.
+- **Scroll sync, both ways.** The preview follows your cursor. Scrolling the preview scrolls the source.
+- **Diagrams.** Mermaid renders in a headless Chrome and shows as an image, sized to your terminal font. Each one renders once and is cached on disk (capped at 100 MB).
+- **Zoom.** Open any diagram or image full-screen, then zoom and pan with keys or the mouse.
+- **Math.** Inline `$…$` becomes Unicode text; display math renders with KaTeX.
+- **Styled.** Heading bands, code with syntax colors, tables, GitHub alerts, task lists, `<details>` blocks, inline badges. Colors come from your colorscheme.
 
 ![vellum.nvim: markdown source on the left, live preview on the right, with badges, a mermaid flowchart, a table and code](docs/hero.png)
 
@@ -46,9 +48,20 @@ lazy runs `build.lua` on install. It installs the diagram renderer: `npm ci` and
 
 ## Use
 
-`:Vellum` toggles the preview. `q` in the preview closes it.
+`:Vellum` toggles the preview. It also closes once no window shows the markdown file.
 
-`<CR>` on a diagram or image in the preview opens it full-screen: `+`/`-` zoom (or Ctrl+wheel, toward the pointer), `hjkl` or the mouse wheel pan, `0` fits, `q` closes. To zoom from the markdown buffer, map `require('vellum').zoom()`; it opens the image beside your cursor.
+In the preview, `q` closes it and `<CR>` on a diagram or image opens it full-screen. There:
+
+- `+` / `-` zoom. Ctrl+wheel zooms toward the mouse pointer.
+- `hjkl`, the arrow keys or the mouse wheel pan.
+- `0` fits the image to the screen.
+- `q` or `<Esc>` closes it.
+
+To zoom without leaving the markdown buffer, map `require('vellum').zoom()`. It opens the image at your cursor:
+
+```lua
+vim.keymap.set('n', '<leader>mz', function() require('vellum').zoom() end)
+```
 
 Options (the defaults):
 

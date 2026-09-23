@@ -40,6 +40,14 @@ q:work('email', function(job)
 end)
 ```
 
+## Backoff
+
+Retry $n$ waits $d_0 \cdot 2^n$ seconds, capped at an hour:
+
+$$
+d_n = \min\left(3600,\; d_0 \cdot 2^{n}\right)
+$$
+
 ## Roadmap
 
 - [x] Durable queues on SQLite

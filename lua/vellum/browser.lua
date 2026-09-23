@@ -6,7 +6,7 @@ local M = {}
 
 local root = debug.getinfo(1, 'S').source:sub(2):match('(.*)/lua/vellum/') .. '/render'
 local dir = vim.fn.stdpath('cache') .. '/vellum'
-local job, pending, errors, sizes, wanted = nil, {}, {}, {}, {}
+local job, pending, errors, sizes, wanted = nil, {}, {}, {}, {} -- pending: out → request
 
 M.on_update = function() end
 
@@ -30,6 +30,8 @@ local function prune()
 end
 prune()
 
+local send -- below; a restarted renderer resends through it
+
 -- Start the renderer, if it is not running. Loading Chrome and mermaid takes
 -- ~0.7 s, so the preview starts it on open rather than on the first diagram.
 -- Returns an error message, or nil.
@@ -37,7 +39,7 @@ function M.start()
   if job then return end
   if not vim.uv.fs_stat(root .. '/node_modules') then return 'renderer not built: run :Lazy build vellum.nvim' end
   vim.fn.mkdir(dir, 'p')
-  local partial, stderr = '', ''
+  local partial, stderr, answered = '', '', false
   local ok, proc = pcall(vim.system, { 'node', root .. '/browser.mjs' }, {
     stdin = true,
     stdout = function(_, data)
@@ -46,10 +48,13 @@ function M.start()
       partial = table.remove(lines)
       vim.schedule(function()
         for _, line in ipairs(lines) do
-          local r = vim.json.decode(line)
-          pending[r.out] = nil
-          errors[r.out] = r.error
-          M.on_update()
+          local done, r = pcall(vim.json.decode, line)
+          if done and r.out then
+            answered = true
+            pending[r.out] = nil
+            errors[r.out] = r.error
+            M.on_update()
+          end
         end
       end)
     end,
@@ -57,14 +62,31 @@ function M.start()
   }, function()
     vim.schedule(function()
       job = nil
-      local why = 'renderer stopped: ' .. (vim.trim(stderr):match('[^\n]*$') or '')
-      for out in pairs(pending) do errors[out] = why end
+      local waiting = pending
       pending = {}
+      if answered then
+        -- it worked before, so Chrome or node crashed: start again and resend
+        -- what was waiting. A request that kills it again fails below.
+        for out, req in pairs(waiting) do send(out, req) end
+      else
+        -- it never worked: a broken setup, which restarting would not fix
+        local why = 'renderer stopped: ' .. (vim.trim(stderr):match('[^\n]*$') or '')
+        for out in pairs(waiting) do errors[out] = why end
+      end
       M.on_update()
     end)
   end)
   if not ok then return 'cannot start node: ' .. tostring(proc) end
   job = proc
+end
+
+-- Queue a render, starting the renderer if needed. Returns an error message, or nil.
+function send(out, req)
+  local err = M.start()
+  if err then return err end
+  pending[out] = req
+  req.out = out
+  job:write(vim.json.encode(req) .. '\n')
 end
 
 -- 'ready', path, { w, h } | 'error', message | 'pending'
@@ -80,11 +102,8 @@ local function request(key, payload)
   end
   if sizes[out] then return 'ready', out, sizes[out] end
   if not pending[out] then
-    local err = M.start()
+    local err = send(out, payload)
     if err then return 'error', err end
-    pending[out] = true
-    payload.out = out
-    job:write(vim.json.encode(payload) .. '\n')
   end
   wanted[out] = true
   return 'pending'

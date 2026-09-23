@@ -19,6 +19,8 @@ const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox
   console.error('cannot start the browser (run :Lazy build vellum.nvim): ' + String(e.message).split('\n')[0]);
   process.exit(1);
 });
+// without Chrome every render would fail; exiting lets the plugin start a new one
+browser.on('disconnected', () => process.exit(1));
 const page = await browser.newPage();
 await page.setViewport({ width: 800, height: 800, deviceScaleFactor: SCALE });
 await page.setContent(`<!DOCTYPE html><body style="margin:0;background:transparent">

@@ -2,13 +2,15 @@
 //   {"out": "/abs/file.png", "code": "...", "theme": {...}}   a mermaid diagram
 //   {"out": "/abs/file.png", "image": "/abs/path or https://..."}   any image the browser can show
 //   {"out": "/abs/file.png", "math": "\\frac{a}{b}", "color": "#rrggbb"}   display math, by KaTeX
+//   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir"}   a document export
 // and answers one JSON line: {"out"} when the PNG is written, or {"out", "error"}.
 // A real browser renders exactly what GitHub renders; a fake DOM mis-measures
 // text and breaks class and gantt diagrams.
-import { readFileSync, renameSync } from 'node:fs';
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer';
 
 const SCALE = 2; // device pixels per CSS px; kitty downsamples, so text stays crisp
@@ -119,7 +121,134 @@ const formula = ({ math, color }) => page.evaluate(async (tex, color) => {
   return null;
 }, math, color);
 
+// Exports: GitHub-flavored markdown with footnotes and math as HTML, then
+// mermaid and alerts done in the page, printed light like GitHub. Math
+// follows the preview's rule (inline.lua): "$…$" hugs its text and no digit
+// follows, so "$5 and $10" stays text. The libraries load on the first
+// export, so a renderer built before export existed still draws diagrams.
+let markdown;
+async function exporter() {
+  const [{ Marked }, { default: footnote }, { default: katex }] = await Promise.all([
+    import('marked'), import('marked-footnote'), import('katex'),
+  ]);
+  const tex = (text, displayMode) => katex.renderToString(text, { displayMode, throwOnError: false });
+  const inline = {
+    name: 'math',
+    level: 'inline',
+    start: (src) => src.indexOf('$'),
+    tokenizer(src) {
+      const m = /^\$\$([^$]+?)\$\$/.exec(src) ?? /^\$(?!\s)((?:\\.|[^$\\])+?)(?<!\s)\$(?!\d)/.exec(src);
+      if (m) return { type: 'math', raw: m[0], text: m[1], display: m[0].startsWith('$$') };
+    },
+    renderer: (t) => tex(t.text, t.display),
+  };
+  const block = {
+    name: 'mathBlock',
+    level: 'block',
+    start: (src) => /^\$\$/m.exec(src)?.index,
+    tokenizer(src) {
+      const m = /^\$\$([\s\S]+?)\$\$[ \t]*(?:\n|$)/.exec(src);
+      if (m) return { type: 'mathBlock', raw: m[0], text: m[1] };
+    },
+    renderer: (t) => tex(t.text, true),
+  };
+  const code = ({ text, lang }) => (lang === 'math' ? tex(text, true) : false); // false: the usual code block
+  return new Marked({ gfm: true }).use(footnote(), { extensions: [inline, block], renderer: { code } });
+}
+
+const EXPORT_CSS = `
+body { margin: 0; color: #1f2328; font: 16px/1.6 -apple-system, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+article { max-width: 860px; margin: 0 auto; padding: 32px; }
+h1, h2 { padding-bottom: .3em; border-bottom: 1px solid #d1d9e0; }
+a { color: #0969da; }
+code, pre { font: 85% ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f6f8fa; border-radius: 6px; }
+code { padding: .2em .4em; }
+pre { padding: 16px; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
+pre code { padding: 0; font-size: 100%; background: none; }
+table { border-collapse: collapse; }
+th, td { padding: 6px 13px; border: 1px solid #d1d9e0; }
+tr:nth-child(2n) { background: #f6f8fa; }
+blockquote { margin: 0; padding: 0 1em; color: #59636e; border-left: .25em solid #d1d9e0; }
+blockquote.alert { color: inherit; }
+.alert > .title { font-weight: 600; }
+.note { border-color: #0969da; } .note > .title { color: #0969da; }
+.tip { border-color: #1a7f37; } .tip > .title { color: #1a7f37; }
+.important { border-color: #8250df; } .important > .title { color: #8250df; }
+.warning { border-color: #9a6700; } .warning > .title { color: #9a6700; }
+.caution { border-color: #d1242f; } .caution > .title { color: #d1242f; }
+li:has(> input[type=checkbox]) { list-style: none; }
+img, .mermaid svg { max-width: 100%; }
+.mermaid { text-align: center; }
+pre, table, img, .mermaid, .katex-display { break-inside: avoid; }
+`;
+
+async function exportDoc({ markdown: text, dir, out }) {
+  markdown ??= await exporter().catch((e) => {
+    throw new Error('export needs a rebuilt renderer (:Lazy build vellum.nvim): ' + e.message);
+  });
+  // a file:// page may load the document's relative images; about:blank may not
+  const tmp = join(tmpdir(), `vellum-export-${process.pid}-${n++}.html`);
+  writeFileSync(tmp, `<!DOCTYPE html><html><head><meta charset="utf-8"><base href="${pathToFileURL(dir + '/').href}">
+    <style>${katexCss}${EXPORT_CSS}</style></head><body><article>${markdown.parse(text)}</article></body></html>`);
+  const doc = await browser.newPage();
+  try {
+    await doc.goto(pathToFileURL(tmp).href, { waitUntil: 'load' });
+    await doc.addScriptTag({ path: fileURLToPath(import.meta.resolve('mermaid/dist/mermaid.min.js')) });
+    await doc.evaluate(async () => {
+      // alert and callout colors, as in the preview (render.lua ALERTS)
+      const kinds = {
+        note: 'note', info: 'note', todo: 'note', abstract: 'note', summary: 'note', tldr: 'note', quote: 'note', cite: 'note',
+        tip: 'tip', hint: 'tip', success: 'tip', check: 'tip', done: 'tip',
+        important: 'important', question: 'important', help: 'important', faq: 'important', example: 'important',
+        warning: 'warning', attention: 'warning',
+        caution: 'caution', danger: 'caution', error: 'caution', failure: 'caution', fail: 'caution', missing: 'caution', bug: 'caution',
+      };
+      for (const q of document.querySelectorAll('blockquote')) {
+        const p = q.firstElementChild;
+        const m = p?.tagName === 'P' && /^\[!(\w+)\][+-]?[ \t]*([^\n]*)\n?/.exec(p.innerHTML);
+        if (!m || !kinds[m[1].toLowerCase()]) continue;
+        q.classList.add('alert', kinds[m[1].toLowerCase()]);
+        p.innerHTML = p.innerHTML.slice(m[0].length);
+        if (!p.innerHTML.trim()) p.remove();
+        const title = m[2] || m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
+        q.insertAdjacentHTML('afterbegin', `<p class="title">${title}</p>`);
+      }
+      // a printed page cannot be clicked open
+      for (const d of document.querySelectorAll('details')) d.open = true;
+      mermaid.initialize({ startOnLoad: false, theme: 'default' });
+      let i = 0;
+      for (const code of document.querySelectorAll('pre > code.language-mermaid')) {
+        const box = document.createElement('div');
+        box.className = 'mermaid';
+        const id = 'export' + i++;
+        try {
+          box.innerHTML = (await mermaid.render(id, code.textContent)).svg;
+          code.parentElement.replaceWith(box);
+        } catch {
+          document.getElementById('d' + id)?.remove(); // a broken diagram stays as its source
+        }
+      }
+      await document.fonts.ready;
+    });
+    if (out.endsWith('.pdf')) {
+      await doc.pdf({ path: out, format: 'A4', printBackground: true, margin: { top: '12mm', bottom: '12mm', left: '10mm', right: '10mm' } });
+    } else {
+      // relative links and images then resolve next to the saved file
+      const html = await doc.evaluate(() => {
+        document.querySelectorAll('base, script').forEach((e) => e.remove());
+        return '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      });
+      writeFileSync(out, html);
+    }
+    return { out };
+  } finally {
+    await doc.close();
+    rmSync(tmp, { force: true });
+  }
+}
+
 async function render(req) {
+  if (req.markdown != null) return exportDoc(req);
   // diagrams keep the container's padding; images and math are shot at their own size
   const [draw, shot] = req.image ? [picture, '#c img'] : req.math != null ? [formula, '#m'] : [diagram, '#c'];
   const error = await draw(req);

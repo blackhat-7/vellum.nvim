@@ -7,6 +7,7 @@ local M = {}
 local root = debug.getinfo(1, 'S').source:sub(2):match('(.*)/lua/vellum/') .. '/render'
 local dir = vim.fn.stdpath('cache') .. '/vellum'
 local job, pending, errors, sizes, wanted = nil, {}, {}, {}, {} -- pending: out → request
+local exports = {} -- out → function(error) to call when the export is done
 
 M.on_update = function() end
 
@@ -52,9 +53,15 @@ function M.start()
           local done, r = pcall(vim.json.decode, line)
           if done and r.out then
             answered = true
-            pending[r.out] = nil
-            errors[r.out] = r.error
-            M.on_update()
+            local finished = exports[r.out]
+            exports[r.out] = nil
+            if finished then
+              finished(r.error)
+            else
+              pending[r.out] = nil
+              errors[r.out] = r.error
+              M.on_update()
+            end
           end
         end
       end)
@@ -63,6 +70,8 @@ function M.start()
   }, function()
     vim.schedule(function()
       job = nil
+      for _, finished in pairs(exports) do finished('renderer stopped') end
+      exports = {}
       local waiting = pending
       pending = {}
       if answered then
@@ -120,6 +129,15 @@ function M.drop_stale()
     end
   end
   wanted = {}
+end
+
+-- Write `markdown`, whose relative links resolve in `dir`, to `out`: a .pdf
+-- or .html file. Calls done(error) when finished; error is nil on success.
+function M.export(markdown, dir, out, done)
+  local err = M.start()
+  if err then return done(err) end
+  exports[out] = done
+  job:write(vim.json.encode({ markdown = markdown, dir = dir, out = out }) .. '\n')
 end
 
 function M.diagram(code, theme)

@@ -458,6 +458,26 @@ do
   check('wrapped link keeps its target on every line', all, vim.inspect(wrapped))
 end
 
+-- export refuses what it cannot do, with a message (the rendering itself needs Chrome)
+do
+  local said
+  local notify = vim.notify
+  vim.notify = function(m) said = m end
+  vim.cmd('silent! only | enew! | silent! %bwipeout!')
+  vim.cmd('edit build.lua')
+  require('vellum').export()
+  check('export needs markdown', said and said:find('markdown buffer'), said)
+  vim.cmd('edit docs/demo.md')
+  said = nil
+  require('vellum').export('out.docx')
+  check('export needs .pdf or .html', said and said:find('%.pdf or %.html'), said)
+  said = nil
+  vim.cmd('runtime plugin/vellum.lua') -- nvim -l loads no plugin files
+  vim.cmd('Vellum nonsense')
+  check('unknown subcommand', said and said:find('unknown command'), said)
+  vim.notify = notify
+end
+
 -- the preview closes with its source, and follows a markdown buffer that replaces it
 do
   local vellum = require('vellum')

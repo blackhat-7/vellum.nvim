@@ -230,6 +230,31 @@ function M.zoom()
   vim.notify('vellum: no image on this line', vim.log.levels.INFO)
 end
 
+-- Write the markdown buffer (the current one, or the previewed one when in
+-- the preview) to `path`, a .pdf or .html file; by default a PDF beside it.
+function M.export(path)
+  local buf = api.nvim_get_current_buf()
+  if buf == S.buf then buf = S.src end
+  if not buf or vim.bo[buf].filetype ~= 'markdown' then
+    return vim.notify('vellum: export works on a markdown buffer', vim.log.levels.ERROR)
+  end
+  local name = api.nvim_buf_get_name(buf)
+  path = (path or '') ~= '' and vim.fn.fnamemodify(vim.fn.expand(path), ':p') or name ~= '' and vim.fn.fnamemodify(name, ':p:r') .. '.pdf'
+  if not path or not (path:match('%.pdf$') or path:match('%.html$')) then
+    return vim.notify('vellum: export to a .pdf or .html file, e.g. :Vellum export notes.pdf', vim.log.levels.ERROR)
+  end
+  vim.notify('vellum: exporting to ' .. path .. ' …')
+  local text = table.concat(api.nvim_buf_get_lines(buf, 0, -1, false), '\n')
+  local dir = name ~= '' and vim.fs.dirname(vim.fn.fnamemodify(name, ':p')) or vim.fn.getcwd()
+  browser.export(text, dir, path, function(err)
+    if err then
+      vim.notify('vellum: export failed: ' .. err, vim.log.levels.ERROR)
+    else
+      vim.notify('vellum: wrote ' .. path)
+    end
+  end)
+end
+
 function M.toggle()
   if valid() then M.close() else M.open() end
 end

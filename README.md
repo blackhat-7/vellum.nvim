@@ -52,6 +52,8 @@ If diagrams don't show, run `:checkhealth vellum`. It checks Node, renders a tes
 
 `:Vellum` toggles the preview. It also closes once no window shows the markdown file.
 
+`:Vellum export` writes the markdown buffer to a PDF beside it. `:Vellum export notes.html` writes a self-contained HTML file instead. Exports are light, like GitHub, with diagrams, math, alerts and footnotes, and `<details>` blocks opened.
+
 In the preview:
 
 - `gx` or `<CR>` on a link follows it. Web links open in your browser, `#heading` links jump to the heading, and links to other markdown files open them in the source window (the preview follows). Other files open in their default app.

@@ -87,6 +87,7 @@ require('vellum').setup({
 | Emphasis, strike, `code`, links, bare URLs | styled inline |
 | Lists, task lists, ordered lists | bullets per depth, checkboxes |
 | Quotes and `> [!NOTE]` alerts | colored bar and title |
+| Obsidian callouts (`> [!question]- Title`), `==highlight==`, `[[wikilinks]]` | callout colors and titles, marked text, links you can follow |
 | Tables | aligned, wrapped to fit, zebra rows |
 | Fenced code | tree-sitter syntax colors, language label |
 | ` ```mermaid ` | image (text fallback outside kitty/Ghostty) |

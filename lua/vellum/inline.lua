@@ -49,6 +49,13 @@ function M.parse(text, hl)
   local function push(s, hls)
     if s == '' then return end
     s = s:gsub('\n', ' ')
+    -- Obsidian's ==highlight==, hugging its text like emphasis does
+    local a, marked, b = s:match('()==([^%s=][^=]-)==()')
+    if a and not marked:match('%s$') then
+      push(s:sub(1, a - 1), hls)
+      push(marked, with(hls, 'VellumMark'))
+      return push(s:sub(b), hls)
+    end
     local i = 1
     if not (vim.tbl_contains(hls, 'VellumLink') or vim.tbl_contains(hls, 'VellumCode')) then
       -- GFM autolinks bare URLs
@@ -95,6 +102,10 @@ function M.parse(text, hl)
     for c in node:iter_children() do
       if not c:named() then goto continue end
       local cs, ce = span(c)
+      -- Obsidian's [[note]] parses as "[", a "[note]" link, "]": take all three
+      if c:type() == 'shortcut_link' and text:sub(cs, cs) == '[' and text:sub(ce + 1, ce + 1) == ']' then
+        cs, ce = cs - 1, ce + 1
+      end
       push(text:sub(pos + 1, cs), hls)
       pos = ce
       local t = c:type()
@@ -142,8 +153,16 @@ function M.parse(text, hl)
         if tag:match('^<[bB][rR]') then segs[#segs + 1] = { '\n' } end
         if tag:match('^<[iI][mM][gG]') then picture(tag:match('src="([^"]*)"'), tag:match('alt="([^"]*)"') or 'image', hls) end
       elseif t == 'shortcut_link' then -- "[x]" without a definition is literal text, "[^x]" a footnote
-        local label = text:sub(cs + 1, ce):match('^%[%^([^%]]+)%]$')
-        if label then segs[#segs + 1] = { M.note(label), with(hls, 'VellumLink') } else push(text:sub(cs + 1, ce), hls) end
+        local raw = text:sub(cs + 1, ce)
+        local label = raw:match('^%[%^([^%]]+)%]$')
+        local wiki, alias = raw:match('^%[%[([^%]|]+)|?([^%]]*)%]%]$')
+        if label then
+          segs[#segs + 1] = { M.note(label), with(hls, 'VellumLink') }
+        elseif wiki then -- Obsidian's [[note#heading|shown text]]
+          segs[#segs + 1] = { alias ~= '' and alias or (wiki:gsub('#', ' › ')), with(hls, 'VellumLink'), link = { wiki = wiki } }
+        else
+          push(raw, hls)
+        end
       elseif not t:match('delimiter$') then
         walk(c, hls)
       elseif literal then

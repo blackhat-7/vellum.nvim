@@ -367,12 +367,33 @@ do
   check('placeholder cols', vim.api.nvim_strwidth(lines[2][1][1]) == 7)
 end
 
+-- Obsidian: callouts, ==highlight==, [[wikilinks]]
+do
+  local lines = doc('> [!question]- Why *here*?\n> body line')
+  check('callout title from its line', find(lines, '󰅾  Why here%?') and find(lines, 'body line') and not find(lines, '%[!'), vim.inspect(lines))
+  lines = doc('> [!tip]\n> text')
+  check('callout without title uses its type', find(lines, '󰌶  Tip') and find(lines, 'text'), vim.inspect(lines))
+  lines = doc('> [!NOTE]\n> first\n> second')
+  check('GitHub alert unchanged', find(lines, '󰋽  Note') and find(lines, 'first second'), vim.inspect(lines))
+  lines = doc('> [!weird] x')
+  check('unknown callout stays a quote', find(lines, '%[!weird%] x'), vim.inspect(lines))
+  local l, rows = doc('a ==mark it== b, a == b == c')
+  local i = find(l, 'a mark it b, a == b == c')
+  local marked = false
+  for _, m in ipairs(i and rows[i] or {}) do marked = marked or m[3] == 'VellumMark' end
+  check('==highlight==', i and marked, vim.inspect(l))
+  lines = doc('see [[Page#Part|alias]] and [[Other#Deep bit]] and [[Plain]]')
+  check('wikilinks show their text', find(lines, 'see alias and Other › Deep bit and Plain'), vim.inspect(lines))
+end
+
 -- links keep their destination through wrapping, tables and headings, and
 -- following one from the preview opens the URL, jumps, or opens the file
 do
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, 'p')
   vim.fn.writefile({ '# Other', '', 'text', '', '## Deep part', '', 'here' }, dir .. '/other file.md')
+  vim.fn.mkdir(dir .. '/sub', 'p')
+  vim.fn.writefile({ '# Deeper note' }, dir .. '/sub/deeper.md')
   vim.fn.writefile({
     '# Top',
     '',
@@ -382,7 +403,7 @@ do
     '| --- |',
     '| [cell](#setup) |',
     '',
-    '[far](other%20file.md#deep-part) [gone](missing.md) [dup](#setup-1)',
+    '[far](other%20file.md#deep-part) [gone](missing.md) [dup](#setup-1) [[deeper]] [[nowhere]] [[other file#Deep part|wiki]]',
     '',
     '## Setup',
     '',
@@ -416,6 +437,14 @@ do
   check('second heading with the same name is -1', click('dup') and vim.api.nvim_win_get_cursor(src)[1] == 13)
   check('plain text is no link', not click('Setup'))
   check('missing file is a message, not a jump', click('gone') and vim.api.nvim_buf_get_name(0):match('main%.md$'))
+  check('unknown wikilink is a message', click('nowhere') and vim.api.nvim_buf_get_name(0):match('main%.md$'))
+  check('wikilink finds a note in a subfolder', click('deeper') and vim.api.nvim_buf_get_name(0):match('sub/deeper%.md$'))
+  vim.cmd.edit(dir .. '/main.md')
+  vim.wait(50)
+  check('wikilink opens the note at its heading', click('wiki') and vim.api.nvim_buf_get_name(0):match('other file%.md$')
+    and vim.api.nvim_win_get_cursor(src)[1] == 5)
+  vim.cmd.edit(dir .. '/main.md')
+  vim.wait(50)
   check('relative markdown file opens at its heading', click('far') and vim.api.nvim_buf_get_name(0):match('other file%.md$')
     and vim.api.nvim_win_get_cursor(src)[1] == 5)
   vim.wait(50)

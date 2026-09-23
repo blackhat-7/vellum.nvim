@@ -55,6 +55,7 @@ function M.apply()
   set('CodeBg', { bg = blend(fg, bg, 0.05) })
   set('CodeLabel', { fg = muted, bg = blend(fg, bg, 0.05), italic = true })
   set('Link', { fg = h[1], underline = true, sp = blend(h[1], bg, 0.5) })
+  set('Mark', { fg = fg, bg = blend(warn, bg, 0.3) }) -- ==highlight==
   set('Bullet', { fg = h[1], bold = true })
   set('Done', { fg = ok })
   set('Todo', { fg = muted })

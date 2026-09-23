@@ -219,16 +219,29 @@ function R.indented_code_block(node, width)
   return code.panel(table.concat(lines, '\n'), nil, width)
 end
 
+-- GitHub's five alerts, and Obsidian's callout types in their colors
 local ALERTS = {
   NOTE = { '󰋽', 'Note' }, TIP = { '󰌶', 'Tip' }, IMPORTANT = { '󰅾', 'Important' },
   WARNING = { '󰀪', 'Warning' }, CAUTION = { '󰳦', 'Caution' },
 }
+for kind, like in pairs({
+  INFO = 'NOTE', TODO = 'NOTE', ABSTRACT = 'NOTE', SUMMARY = 'NOTE', TLDR = 'NOTE', QUOTE = 'NOTE', CITE = 'NOTE',
+  HINT = 'TIP', SUCCESS = 'TIP', CHECK = 'TIP', DONE = 'TIP',
+  QUESTION = 'IMPORTANT', HELP = 'IMPORTANT', FAQ = 'IMPORTANT', EXAMPLE = 'IMPORTANT',
+  ATTENTION = 'WARNING', DANGER = 'CAUTION', ERROR = 'CAUTION', FAILURE = 'CAUTION', FAIL = 'CAUTION',
+  MISSING = 'CAUTION', BUG = 'CAUTION',
+}) do
+  ALERTS[kind] = { ALERTS[like][1], ALERTS[like][2], kind:sub(1, 1) .. kind:sub(2):lower() }
+end
 
 function R.block_quote(node, width)
   local body, head, alert = kids(node, '^block_quote_marker$'), {}, nil
   local p = body[1] and body[1]:type() == 'paragraph' and child(body[1], 'inline')
+  local title
   if p then
-    local kind, rest = text_of(p, p):match('^%[!(%a+)%]%s*(.*)$')
+    -- "[!type]", an Obsidian fold mark (shown open), a title on the same line
+    local kind, rest
+    kind, title, rest = text_of(p, p):match('^%[!(%a+)%][+-]?[ \t]*([^\n]*)\n?(.*)$')
     alert = kind and ALERTS[kind:upper()]
     if alert then
       table.remove(body, 1)
@@ -239,7 +252,9 @@ function R.block_quote(node, width)
   local bar = alert and ('Vellum' .. alert[2]) or 'VellumQuoteBar'
   local inner = {}
   if alert then
-    inner[1] = { { alert[1] .. '  ' .. alert[2], bar } }
+    local name = title ~= '' and title or alert[3] or alert[2]
+    inner = inline.wrap(inline.parse(name, bar), width - 5)
+    for i, l in ipairs(inner) do table.insert(l, 1, { i == 1 and alert[1] .. '  ' or '   ', bar }) end
     vim.list_extend(inner, head)
     if #head > 0 and #lines > 0 then inner[#inner + 1] = {} end
   end

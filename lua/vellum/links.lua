@@ -22,6 +22,21 @@ local function slug(text)
   return (text:gsub(' ', '-'))
 end
 
+-- The file an Obsidian [[note#heading]] points to, as a destination, or nil.
+-- A note is found next to `buf`, else anywhere under the vault (the folder
+-- holding .obsidian, or `buf`'s folder); "#heading" is the heading's text.
+local function wiki(buf, note)
+  local name, heading_text = note:match('^([^#]*)#?(.*)$')
+  local anchor = heading_text ~= '' and '#' .. slug(heading_text) or ''
+  if name == '' then return anchor end
+  if not name:lower():match('%.%w+$') then name = name .. '.md' end
+  local dir = vim.fs.dirname(vim.api.nvim_buf_get_name(buf))
+  if vim.uv.fs_stat(dir .. '/' .. name) then return dir .. '/' .. name .. anchor end
+  local found = vim.fs.find(function(n, path) return n == vim.fs.basename(name) and (path .. '/' .. n):sub(-#name - 1) == '/' .. name end,
+    { path = vim.fs.root(buf, '.obsidian') or dir, type = 'file', limit = 1 })[1]
+  return found and found .. anchor
+end
+
 -- 0-based row of the heading `anchor` points to in `buf`, or nil. Repeated
 -- headings get "-1", "-2", … like on GitHub.
 local function heading(buf, anchor)
@@ -36,11 +51,15 @@ local function heading(buf, anchor)
   end
 end
 
--- Follow `link` (a destination, or { ref = label }) found in `buf`, shown in
--- window `win`. Returns an error message, or nil.
+-- Follow `link` (a destination, { ref = label } or { wiki = note }) found in
+-- `buf`, shown in window `win`. Returns an error message, or nil.
 function M.follow(link, buf, win)
-  local target = type(link) == 'table' and definition(buf, link.ref) or link
-  if not target or target == '' then return 'link has no destination' end
+  local target = link
+  if type(link) == 'table' then
+    target = link.ref and definition(buf, link.ref) or link.wiki and wiki(buf, link.wiki)
+    if not target then return link.wiki and 'no note named ' .. link.wiki or 'no definition for [' .. link.ref .. ']' end
+  end
+  if target == '' then return 'link has no destination' end
   if target:match('^%a[%w+.-]*:') then
     vim.ui.open(target)
     return

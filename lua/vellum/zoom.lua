@@ -50,7 +50,7 @@ function M.open(path)
     for i, l in ipairs(cells) do
       api.nvim_buf_set_extmark(buf, ns, top + i - 1, #pad, { end_col = #pad + #l[1][1], hl_group = l[1][2] })
     end
-    vim.wo[win].winbar = ('%%#VellumMuted# %d%%%%%s  +/- zoom · hjkl pan · 0 fit · q close'):format(z * 100 + 0.5, max and ' (max)' or '')
+    vim.wo[win].winbar = ('%%#VellumMuted# %d%%%%%s  +/- zoom · hjkl/wheel pan · 0 fit · q close'):format(z * 100 + 0.5, max and ' (max)' or '')
   end
 
   local function layout()
@@ -68,6 +68,10 @@ function M.open(path)
   local function close() if api.nvim_win_is_valid(win) then api.nvim_win_close(win, true) end end
   layout()
   api.nvim_create_autocmd('VimResized', { group = group, callback = layout })
+  -- the placeholder text must stay put: a scrolled view shifts or cuts the image
+  api.nvim_create_autocmd('WinScrolled', { group = group, pattern = tostring(win), callback = function()
+    api.nvim_win_call(win, function() vim.fn.winrestview({ topline = 1, leftcol = 0 }) end)
+  end })
   -- a viewer left behind another window would hold stale state
   api.nvim_create_autocmd('WinLeave', { group = group, buffer = buf, callback = vim.schedule_wrap(close) })
   api.nvim_create_autocmd('BufWipeout', { group = group, buffer = buf, callback = function()
@@ -78,20 +82,24 @@ function M.open(path)
   local function map(keys, fn)
     for _, k in ipairs(keys) do vim.keymap.set('n', k, function() fn() draw() end, { buffer = buf, nowait = true }) end
   end
+  -- dx, dy: how far to move, as a fraction of the view
   local function pan(dx, dy)
     return function()
       local w, h, cols, rows = size()
-      -- a quarter of the view per press
-      fx, fy = fx + dx * w / 4 / cols, fy + dy * h / 4 / rows
+      fx, fy = fx + dx * w / cols, fy + dy * h / rows
     end
   end
   map({ '+', '=' }, function() z = z * STEP end)
   map({ '-' }, function() z = math.max(1, z / STEP) end)
   map({ '0' }, function() z, fx, fy = 1, 0.5, 0.5 end)
-  map({ 'h', '<Left>' }, pan(-1, 0))
-  map({ 'l', '<Right>' }, pan(1, 0))
-  map({ 'k', '<Up>' }, pan(0, -1))
-  map({ 'j', '<Down>' }, pan(0, 1))
+  map({ 'h', '<Left>' }, pan(-0.25, 0))
+  map({ 'l', '<Right>' }, pan(0.25, 0))
+  map({ 'k', '<Up>' }, pan(0, -0.25))
+  map({ 'j', '<Down>' }, pan(0, 0.25))
+  map({ '<ScrollWheelLeft>' }, pan(-0.1, 0))
+  map({ '<ScrollWheelRight>' }, pan(0.1, 0))
+  map({ '<ScrollWheelUp>' }, pan(0, -0.1))
+  map({ '<ScrollWheelDown>' }, pan(0, 0.1))
   for _, k in ipairs({ 'q', '<Esc>' }) do vim.keymap.set('n', k, close, { buffer = buf, nowait = true }) end
 end
 

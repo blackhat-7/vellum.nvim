@@ -36,3 +36,4 @@ Resizing the pane stays smooth. Math verified by eye in kitty inside tmux. Zoom 
 - **Two-way scroll sync loops unless each side ignores its own echo:** `sync` records `S.top`, `follow` records `S.view`. The preview needs `scrolloff=0`, or it shifts the topline `sync` set.
 - **The preview must never scroll sideways.** Image rows carry kitty diacritics on their first cell only; shift it off and every row shows row 0. `scrolled()` pins `leftcol` to 0. Headless never fires `WinScrolled`; check it in tmux.
 - **Kitty ignores the source rectangle (`x,y,w,h`) on placeholder placements.** The zoom viewer crops by naming cells instead, so zoom stops where the image reaches 297 cells on a side.
+- **tmux can drop a kitty placement command under a burst of redraws** (fast wheel zoom). The text is right but the picture keeps an old size. The zoom viewer re-sends its placement 100 ms after the last event.

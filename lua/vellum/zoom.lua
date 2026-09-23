@@ -17,6 +17,7 @@ function M.open(path)
   local buf = api.nvim_create_buf(false, true)
   vim.bo[buf].bufhidden = 'wipe'
   local win
+  local settle = vim.uv.new_timer()
   local z, fx, fy = 1, 0.5, 0.5 -- zoom over fit-to-screen; view center as a fraction of the image
 
   -- The view's size and the image's full cell box at the current zoom.
@@ -50,6 +51,7 @@ function M.open(path)
     for i, l in ipairs(cells) do
       api.nvim_buf_set_extmark(buf, ns, top + i - 1, #pad, { end_col = #pad + #l[1][1], hl_group = l[1][2] })
     end
+    settle:start(100, 0, vim.schedule_wrap(function() image.resend(id) end))
     vim.wo[win].winbar = ('%%#VellumMuted# %d%%%%%s  +/-/ctrl-wheel zoom · hjkl/wheel pan · 0 fit · q close'):format(z * 100 + 0.5, max and ' (max)' or '')
   end
 
@@ -75,6 +77,7 @@ function M.open(path)
   -- a viewer left behind another window would hold stale state
   api.nvim_create_autocmd('WinLeave', { group = group, buffer = buf, callback = vim.schedule_wrap(close) })
   api.nvim_create_autocmd('BufWipeout', { group = group, buffer = buf, callback = function()
+    settle:close()
     image.drop(id)
     api.nvim_del_augroup_by_id(group)
   end })

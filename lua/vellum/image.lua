@@ -85,16 +85,17 @@ local function transmit(id, cols, rows, path)
   f:close()
   for i = 1, #data, 4096 do
     local more = i + 4096 <= #data and 1 or 0
-    local keys = i == 1 and ('a=T,f=100,U=1,q=2,i=%d,c=%d,r=%d,m=%d'):format(id, cols, rows, more) or 'm=' .. more
+    local keys = i == 1 and ('a=T,f=100,U=1,q=2,i=%d,p=1,c=%d,r=%d,m=%d'):format(id, cols, rows, more) or 'm=' .. more
     send('\27_G' .. keys .. ';' .. data:sub(i, i + 4095) .. '\27\\')
   end
 end
 
 -- Re-place an image already sent at a new size. Tiny, unlike transmit():
 -- tmux drops large bursts while a pane resizes, so a resize must not re-send pixels.
+-- The fixed placement id makes kitty replace the placement in one step; a
+-- delete-then-place pair left stale placements behind under fast zooming.
 local function place(id, cols, rows)
-  send(('\27_Ga=d,d=i,i=%d,q=2\27\\'):format(id))
-  send(('\27_Ga=p,U=1,q=2,i=%d,c=%d,r=%d\27\\'):format(id, cols, rows))
+  send(('\27_Ga=p,U=1,q=2,i=%d,p=1,c=%d,r=%d\27\\'):format(id, cols, rows))
 end
 
 -- Pixel size of one terminal cell.
@@ -153,6 +154,13 @@ end
 
 -- Placeholder lines showing `path` in a cols x rows box, as segment lines.
 function M.lines(path, cols, rows) return M.grid(M.id(path), path, cols, rows, 0, 0, rows, cols) end
+
+-- Send image `id`'s current placement again. Under a burst of redraws tmux
+-- can drop one, leaving the picture at an old size over the new text.
+function M.resend(id)
+  local cols, rows = (sent[id] or ''):match('^(%d+)x(%d+)$')
+  if cols then place(id, cols, rows) end
+end
 
 -- Free image `id`'s pixels in the terminal.
 function M.drop(id)

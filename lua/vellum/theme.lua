@@ -50,6 +50,8 @@ function M.apply()
   set('Italic', { italic = true })
   set('Strike', { strikethrough = true, fg = muted })
   set('Code', { fg = h[5], bg = blend(fg, bg, 0.09) })
+  set('Math', { fg = h[6] })
+  M.math = hex(h[6]) -- display math pictures match the text shown while they render
   set('CodeBg', { bg = blend(fg, bg, 0.05) })
   set('CodeLabel', { fg = muted, bg = blend(fg, bg, 0.05), italic = true })
   set('Link', { fg = h[1], underline = true, sp = blend(h[1], bg, 0.5) })

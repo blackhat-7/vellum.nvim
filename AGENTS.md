@@ -10,11 +10,12 @@ A Neovim plugin: `:Vellum` opens a live, beautifully rendered GitHub-markdown pr
 - `lua/vellum/render.lua` — markdown blocks (tree-sitter) → styled lines + scroll anchors. Caches per block.
 - `lua/vellum/inline.lua` — inline markdown → styled segments; word wrap.
 - `lua/vellum/code.lua` — code panels with syntax colors; mermaid diagrams.
+- `lua/vellum/latex.lua` — LaTeX math → Unicode text (inline); KaTeX pictures (display).
 - `lua/vellum/media.lua` — images (local, remote, any format) → placeholder lines.
 - `lua/vellum/init.lua` — preview window, autocmds, scroll sync.
 - `lua/vellum/theme.lua` — palette derived from the active colorscheme.
 - `lua/vellum/image.lua` — kitty graphics via Unicode placeholders (works through tmux).
-- `lua/vellum/browser.lua` + `render/browser.mjs` — one long-lived headless Chrome turns diagrams and non-PNG images into cached PNGs.
+- `lua/vellum/browser.lua` + `render/browser.mjs` — one long-lived headless Chrome turns diagrams, display math and non-PNG images into cached PNGs.
 - `build.lua` — lazy.nvim runs it on install: `npm ci` + headless shell download.
 
 Lua for Neovim ≥ 0.12. Node ≥ 20 for the renderer only.

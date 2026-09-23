@@ -68,6 +68,7 @@ require('vellum').setup({
 | Fenced code | tree-sitter syntax colors, language label |
 | ` ```mermaid ` | image (text fallback outside kitty/Ghostty) |
 | Footnotes | superscript refs, muted notes |
+| Math: `$…$`, `$$…$$`, ` ```math ` | inline as Unicode text (`x²`, `α ≤ β`); display math as a KaTeX image (Unicode text elsewhere) |
 | Images: PNG, JPG, GIF, WebP, SVG, local or http(s) | image (alt text elsewhere) |
 | Front matter, HTML blocks | shown as YAML / text; comments hidden |
 

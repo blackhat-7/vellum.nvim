@@ -2,6 +2,7 @@
 -- A segment is { text, hl, marks }: hl is nil, a group, or a list of groups
 -- (merged, later wins); marks are extra { start, end, group } byte ranges.
 local media = require('vellum.media')
+local latex = require('vellum.latex')
 
 local ts = vim.treesitter
 local strwidth = vim.api.nvim_strwidth
@@ -34,7 +35,8 @@ function M.note(label)
   return label:match('^%d+$') and (label:gsub('%d', SUPERSCRIPT)) or '[' .. label .. ']'
 end
 
--- Inline markdown → segments. A { '\n' } segment is a hard line break.
+-- Inline markdown → segments under `hl`, a group or list of groups. A
+-- { '\n' } segment is a hard line break.
 function M.parse(text, hl)
   local segs = {}
   local function with(hls, g)
@@ -67,6 +69,22 @@ function M.parse(text, hl)
     local a, b = span(n)
     return text:sub(a + 1, b)
   end
+  -- "$$…$$" is display math. "$…$" is math only when it hugs its content and
+  -- no digit follows (Pandoc's rule), so "$5 and $10" stays text.
+  local function formula(src, after, hls)
+    local n = #src:match('^%$*')
+    local body = src:sub(n + 1, -n - 1)
+    local ok = n <= 2 and #src > 2 * n and src:sub(-n) == ('$'):rep(n) and body:match('%S')
+    if n == 1 then
+      ok = ok and not body:match('^%s') and not body:match('%s$') and not after:match('%d')
+      body = body:match('^`(.*)`$') or body -- GitHub's $`…`$ form
+    end
+    if not ok then -- the "$" is text; what follows may still be markdown
+      push('$', hls)
+      return vim.list_extend(segs, M.parse(src:sub(2), hls))
+    end
+    segs[#segs + 1] = { latex.text(body), with(hls, 'VellumMath'), display = n == 2 and body or nil }
+  end
   -- `literal`: this node's delimiters are text, not markup
   local function walk(node, hls, literal)
     local pos, stop = span(node)
@@ -93,6 +111,8 @@ function M.parse(text, hl)
         local code = text:sub(cs + 1, ce):gsub('^`+', ''):gsub('`+$', ''):gsub('\n', ' ')
         if code:match('^ .* $') then code = code:sub(2, -2) end
         segs[#segs + 1] = { ' ' .. code .. ' ', with(hls, 'VellumCode') }
+      elseif t == 'latex_block' then
+        formula(text:sub(cs + 1, ce), text:sub(ce + 1, ce + 1), hls)
       elseif t == 'inline_link' or t == 'full_reference_link' or t == 'collapsed_reference_link' then
         local label = child(c, 'link_text')
         if label then walk(label, with(hls, 'VellumLink')) end
@@ -125,14 +145,26 @@ function M.parse(text, hl)
     end
     push(text:sub(pos + 1, stop), hls)
   end
-  walk(ts.get_string_parser(text, 'markdown_inline'):parse()[1]:root(), hl and { hl } or {})
+  walk(ts.get_string_parser(text, 'markdown_inline'):parse()[1]:root(), type(hl) == 'table' and hl or { hl })
   return segs
+end
+
+-- Display math on lines of its own: the KaTeX picture, else its text form
+-- centered, with the renderer's complaint if it has one. `key` names its place in
+-- the document, so an edit shows the last picture until the new one is ready.
+function M.display(tex, width, key)
+  local pic, err = latex.picture(tex, width, key)
+  if pic then return pic end
+  local out = M.wrap({ { latex.text(tex), { 'VellumMath' } } }, width)
+  for _, l in ipairs(out) do table.insert(l, 1, { string.rep(' ', math.floor((width - M.width(l)) / 2)) }) end
+  return err and vim.list_extend(out, M.wrap({ { '✗ ' .. err, { 'VellumError' } } }, width)) or out
 end
 
 -- Greedy word wrap. A word may span segments ("**bold**,"), so breaks happen
 -- only at whitespace; a word wider than the line is split by characters.
--- An image segment that can be shown becomes a picture on lines of its own.
-function M.wrap(segs, width)
+-- An image segment that can be shown, and display math, become lines of
+-- their own. `key`: the source row, see M.display.
+function M.wrap(segs, width, key)
   local lines, line, w = {}, {}, 0
   local word, ww, space = {}, 0, nil
   local function newline() lines[#lines + 1], line, w = line, {}, 0 end
@@ -158,8 +190,13 @@ function M.wrap(segs, width)
     end
     word, ww, space = {}, 0, nil
   end
+  local k = 0
   for _, s in ipairs(segs) do
     local pic = s.image and media.image(s.image, width)
+    if s.display then
+      k = k + 1
+      pic = M.display(s.display, width, key and key .. ':' .. k)
+    end
     if pic then
       flush()
       if w > 0 then newline() end

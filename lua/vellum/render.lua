@@ -5,6 +5,7 @@ local theme = require('vellum.theme')
 local inline = require('vellum.inline')
 local media = require('vellum.media')
 local code = require('vellum.code')
+local latex = require('vellum.latex')
 
 local ts = vim.treesitter
 local strwidth = vim.api.nvim_strwidth
@@ -17,6 +18,7 @@ local depth = 0 -- list nesting, picks the bullet glyph
 function M.reset()
   cache, used = {}, {}
   code.reset()
+  latex.reset()
 end
 
 local ZWSP = '\226\128\139' -- zero-width space, see M.render
@@ -197,7 +199,7 @@ function R.paragraph(node, width)
   local inl = child(node, 'inline')
   local text = inl and text_of(inl, inl) or text_of(node, node)
   if text:match('^%[%^[^%]]+%]:') then return footnotes(text, width) end
-  return inline.wrap(inline.parse(text), width)
+  return inline.wrap(inline.parse(text), width, (node:start()))
 end
 
 function R.fenced_code_block(node, width)
@@ -206,6 +208,7 @@ function R.fenced_code_block(node, width)
   local body = child(node, 'code_fence_content')
   local text = body and text_of(body, node) or ''
   if lang and lang:lower() == 'mermaid' and image.supported then return code.diagram(text, width, (node:start())) end
+  if lang and lang:lower() == 'math' then return inline.display(text, width, (node:start())) end
   return code.panel(text, lang, width)
 end
 
@@ -313,7 +316,7 @@ function R.pipe_table(node, width)
       for c in r:iter_children() do
         if c:type() == 'pipe_table_cell' then
           local segs = inline.parse(vim.trim(text_of(c)))
-          for _, s in ipairs(segs) do s.image = nil end -- a block picture would burst the cell
+          for _, s in ipairs(segs) do s.image, s.display = nil, nil end -- a block picture would burst the cell
           cells[#cells + 1] = segs
         end
       end

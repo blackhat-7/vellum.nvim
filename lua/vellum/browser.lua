@@ -1,5 +1,5 @@
 -- Bridge to render/browser.mjs: one long-lived headless browser turns mermaid
--- diagrams and non-PNG images into PNGs, cached on disk by content hash.
+-- diagrams, display math and non-PNG images into PNGs, cached on disk by content hash.
 local image = require('vellum.image')
 
 local M = {}
@@ -104,6 +104,11 @@ end
 
 function M.diagram(code, theme)
   return request(theme.signature .. code, { code = code, theme = theme.mermaid })
+end
+
+-- Display math in text color `color`.
+function M.math(tex, color)
+  return request('math\0' .. color .. '\0' .. tex, { math = tex, color = color })
 end
 
 -- `src` is a local path or an http(s) URL; `version` changes when it should re-render.

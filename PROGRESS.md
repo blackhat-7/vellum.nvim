@@ -2,11 +2,13 @@
 
 ## Where things stand
 
-Working plugin, public at github.com/blackhat-7/vellum.nvim. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor. Keystroke cost: 0.23 ms for a README, ~6.7 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings, paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists, quotes, GitHub alerts, footnotes, tables, code with syntax colors, front matter, HTML blocks, `<details>` summaries (`▾`), images (block, or inline one row high for badges), mermaid diagrams.
+Working plugin, public at github.com/blackhat-7/vellum.nvim. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor. Keystroke cost: 0.23 ms for a README, ~6.8 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings, paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists, quotes, GitHub alerts, footnotes, tables, code with syntax colors, front matter, HTML blocks, `<details>` summaries (`▾`), images (block, or inline one row high for badges), mermaid diagrams, math.
 
-Rendering is split by job: `render.lua` (blocks), `inline.lua` (inline text, wrap), `code.lua` (code panels, diagrams), `media.lua` (images). The renderer starts on `:Vellum`; the PNG cache is capped at 100 MB.
+Math: inline `$…$` becomes Unicode text (`latex.lua`); `$$…$$` and ```` ```math ```` become KaTeX pictures through the same headless browser as mermaid, with the text form while rendering or without kitty graphics. `$5 and $10` stays text.
 
-Resizing the pane stays smooth: images fit the width and the preview redraws once a drag settles. Verified by eye in kitty inside tmux. `nvim --clean -l test/run.lua`: 73 checks green.
+Rendering is split by job: `render.lua` (blocks), `inline.lua` (inline text, wrap), `code.lua` (code panels, diagrams), `media.lua` (images), `latex.lua` (math). The renderer starts on `:Vellum`; the PNG cache is capped at 100 MB.
+
+Resizing the pane stays smooth. Math verified by eye in kitty inside tmux. `nvim --clean -l test/run.lua`: 108 checks green.
 
 ## What's next
 
@@ -26,4 +28,6 @@ Resizing the pane stays smooth: images fit the width and the preview redraws onc
 - **Screenshot checks:** a headless Hyprland output (`hyprctl output create headless`) plus `grim -o` captures kitty without covering the real screen. Launch kitty with `-o confirm_os_window_close=0`.
 - **`vim.fn.tempname()` + `XDG_CACHE_HOME`:** `test/run.lua` sets a private cache before requiring the plugin, because `browser.lua` prunes the cache on load.
 - **Recording video:** `wf-recorder` is broken here (libavutil). Pipe `grim -g <window> -t ppm -` in a loop into `ffmpeg -f image2pipe -use_wallclock_as_timestamps 1`; drive nvim with `tmux send-keys`.
+- **Tree-sitter's `latex_block` swallows markup:** `$5 [a](b) $10` is one node; `inline.lua` re-parses after a rejected `$`. Markup spanning the second `$` (`**$10**`) still shows raw.
+- **Renderer page must stay in standards mode** (`<!DOCTYPE html>`) for KaTeX; mermaid SVGs are `display:block` there to keep diagram sizes unchanged.
 - **README shots come from `docs/demo.md`.** Launch kitty with `-o background_image=none -o background_opacity=1` (transparent schemes show the wallpaper). The compositor pointer lands on the headless output; patch it out.

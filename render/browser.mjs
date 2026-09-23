@@ -1,11 +1,12 @@
 // Headless-browser PNG renderer. Reads one JSON request per stdin line:
 //   {"out": "/abs/file.png", "code": "...", "theme": {...}}   a mermaid diagram
 //   {"out": "/abs/file.png", "image": "/abs/path or https://..."}   any image the browser can show
+//   {"out": "/abs/file.png", "math": "\\frac{a}{b}", "color": "#rrggbb"}   display math, by KaTeX
 // and answers one JSON line: {"out"} when the PNG is written, or {"out", "error"}.
 // A real browser renders exactly what GitHub renders; a fake DOM mis-measures
 // text and breaks class and gantt diagrams.
 import { readFileSync, renameSync } from 'node:fs';
-import { extname } from 'node:path';
+import { dirname, extname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
@@ -20,9 +21,18 @@ const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox
 });
 const page = await browser.newPage();
 await page.setViewport({ width: 800, height: 800, deviceScaleFactor: SCALE });
-await page.setContent(`<body style="margin:0;background:transparent">
+await page.setContent(`<!DOCTYPE html><body style="margin:0;background:transparent">
   <div id="c" style="display:inline-block;padding:12px"></div></body>`);
 await page.addScriptTag({ path: fileURLToPath(import.meta.resolve('mermaid/dist/mermaid.min.js')) });
+await page.addScriptTag({ path: fileURLToPath(import.meta.resolve('katex/dist/katex.min.js')) });
+// KaTeX's fonts inlined: an about:blank page cannot fetch its relative font URLs
+const katexDir = dirname(fileURLToPath(import.meta.resolve('katex/dist/katex.min.css')));
+const katexCss = readFileSync(join(katexDir, 'katex.min.css'), 'utf8').replace(/src:[^;}]*/g, (src) => {
+  const font = readFileSync(join(katexDir, /url\((fonts\/[^)]+\.woff2)\)/.exec(src)[1])).toString('base64');
+  return `src:url(data:font/woff2;base64,${font}) format("woff2")`;
+});
+// standards mode (KaTeX needs it) puts an inline svg on a text baseline, with a gap below
+await page.addStyleTag({ content: katexCss + '.katex-display{margin:0} #c > svg{display:block}' });
 
 let n = 0;
 const diagram = ({ code, theme }) => page.evaluate(async (code, id, theme) => {
@@ -92,12 +102,28 @@ const picture = ({ image }) => {
   }, src);
 };
 
+const formula = ({ math, color }) => page.evaluate(async (tex, color) => {
+  const c = document.getElementById('c');
+  c.innerHTML = '<div id="m" style="display:inline-block;padding:2px 4px"></div>';
+  const m = c.firstElementChild;
+  m.style.color = color;
+  try {
+    katex.render(tex, m, { displayMode: true, throwOnError: true, strict: 'ignore' });
+  } catch (e) {
+    c.innerHTML = '';
+    return String(e?.message ?? e).slice(0, 600);
+  }
+  await document.fonts.ready; // fonts load on first use; a shot before then shows fallback glyphs
+  return null;
+}, math, color);
+
 async function render(req) {
-  const error = await (req.image ? picture(req) : diagram(req));
+  // diagrams keep the container's padding; images and math are shot at their own size
+  const [draw, shot] = req.image ? [picture, '#c img'] : req.math != null ? [formula, '#m'] : [diagram, '#c'];
+  const error = await draw(req);
   if (error) return { out: req.out, error };
   // write then rename, so a killed process never leaves a half PNG in the cache
-  // diagrams keep the container's padding; images are shot bare, at their own size
-  await (await page.$(req.image ? '#c img' : '#c')).screenshot({ path: req.out + '.tmp.png', omitBackground: true });
+  await (await page.$(shot)).screenshot({ path: req.out + '.tmp.png', omitBackground: true });
   renameSync(req.out + '.tmp.png', req.out);
   return { out: req.out };
 }

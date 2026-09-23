@@ -164,6 +164,56 @@ do
   check('footnote defs', find(lines, '^  ¹ First%.$') and find(lines, '^  %[x%] Second one wraps on%.$'), vim.inspect(lines))
 end
 
+-- math: inline as Unicode text, display as its own centered lines (no
+-- images here, so display math shows its text form too)
+do
+  local latex = require('vellum.latex')
+  for tex, want in pairs({
+    ['x^2 + y_i = z^{2n+1}'] = 'x² + yᵢ = z²ⁿ⁺¹',
+    ['\\alpha \\leq \\beta \\neq \\infty'] = 'α ≤ β ≠ ∞',
+    ['\\frac{a+b}{c} = \\frac12'] = '(a + b)/c = 1/2',
+    ['\\sqrt{x^2+1} + \\sqrt[3]{8}'] = '√(x² + 1) + ∛8',
+    ['\\sum_{i=1}^{n} i'] = '∑ᵢ₌₁ⁿ i',
+    ['\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx'] = '∫_(−∞)^∞ e^(−x²) dx',
+    ['\\lim_{x \\to 0} \\frac{\\sin x}{x}'] = 'lim_(x→0) (sin x)/x',
+    ['O(n \\log n)'] = 'O(n log n)',
+    ['a = -b'] = 'a = −b',
+    ['\\mathbb{R}^n \\subseteq \\mathcal{L}'] = 'ℝⁿ ⊆ ℒ',
+    ['\\hat{x} + \\vec{v}'] = 'x̂ + v⃗',
+    ['\\text{if } x > 0'] = 'if x > 0',
+    ['\\left\\{ x \\mid x \\in S \\right\\}'] = '{x ∣ x ∈ S}',
+    ['\\left. f \\right|_0^1'] = 'f|₀¹',
+    ['\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}'] = '(1  2; 3  4)',
+    ['\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}'] = 'a = b; c = d',
+    ['\\not= \\not\\in'] = '≠ ∉',
+    ['a \\equiv b \\pmod{n}'] = 'a ≡ b (mod n)',
+    ['\\color{red} x'] = 'x',
+    ['\\foo{x}'] = '\\foo x', -- unknown commands are shown, never dropped
+    ['\\frac'] = '/', ['x^'] = 'x', ['{'] = '', ['}}'] = '', ['\\'] = '\\', ['\\begin{cases}'] = '{ ',
+  }) do
+    check('latex ' .. tex, latex.text(tex) == want, latex.text(tex))
+  end
+  local function has(lines, s)
+    for _, l in ipairs(lines) do
+      if l:find(s, 1, true) then return l end
+    end
+  end
+  local lines = doc('Euler $e^{i\\pi} + 1 = 0$ and $`\\sqrt{2}`$ here.')
+  check('inline math', has(lines, 'Euler e^(iπ) + 1 = 0 and √2 here.'), vim.inspect(lines))
+  lines = doc('It costs $5 and $10, a $ x $ gap, \\$3.')
+  check('dollars stay text', has(lines, 'It costs $5 and $10, a $ x $ gap, $3.'), vim.inspect(lines))
+  lines = doc('Text before\n$$\n\\frac{a}{b}\\,c\n$$\nafter', 40)
+  local i = find(lines, 'a/b c')
+  check('display math on its own centered line', i and lines[i]:match('^%s+a/b c$') and #lines[i] > 20
+    and find(lines, 'Text before$') and find(lines, '^%s*after$'), vim.inspect(lines))
+  check('math fence', has(doc('```math\nx^2\n```'), 'x²'))
+  check('markdown inside a non-math $ span', has(doc('Pay $5 to [site](http://x) and $10.'), 'Pay $5 to site and $10.'))
+  check('nested scripts stay nested', latex.text('a^{b^{c}}') == 'a^(bᶜ)', latex.text('a^{b^{c}}'))
+  check('NUL in a script', pcall(doc, 'a $x^{a\0b}$ c'))
+  check('deep nesting shows the source', latex.text(('{'):rep(10000)) == ('{'):rep(10000))
+  check('math in a table cell stays in the cell', find(doc('| a |\n|---|\n| $$x^2$$ |'), '│ x² │'))
+end
+
 -- inline styles land on the right text: the group covering `word`'s first byte
 do
   local function style(text, word)
@@ -200,7 +250,7 @@ end
 -- fuzz: random edits of the sample never crash and never overflow the window
 do
   math.randomseed(42)
-  local pieces = { '\n', ' ', '*', '_', '`', '```', '> ', '- ', '1. ', '|', '#', '[', ']', '(', ')', '!', '<', '>', '\\', '~~', '[!NOTE]', '[^1]', '\n[^a]: ', '---', '\t', 'é', '漢', '    ' }
+  local pieces = { '\n', ' ', '*', '_', '`', '```', '> ', '- ', '1. ', '|', '#', '[', ']', '(', ')', '!', '<', '>', '\\', '~~', '[!NOTE]', '[^1]', '\n[^a]: ', '---', '\t', 'é', '漢', '    ', '$', '$$', '\\frac{', '^{', '\\begin{pmatrix}', '\\left(', '\\end{x}', '```math\n' }
   local crashes, overflow = 0, 0
   for _ = 1, 300 do
     local text = sample

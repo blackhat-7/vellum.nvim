@@ -25,4 +25,5 @@ Resizing the pane stays smooth: images fit the width and the preview redraws onc
 - **Harness: start nvim after kitty attaches to tmux.** Before a client attaches, tmux reports no RGB and images are disabled.
 - **Screenshot checks:** a headless Hyprland output (`hyprctl output create headless`) plus `grim -o` captures kitty without covering the real screen. Launch kitty with `-o confirm_os_window_close=0`.
 - **`vim.fn.tempname()` + `XDG_CACHE_HOME`:** `test/run.lua` sets a private cache before requiring the plugin, because `browser.lua` prunes the cache on load.
+- **Recording video:** `wf-recorder` is broken here (libavutil). Pipe `grim -g <window> -t ppm -` in a loop into `ffmpeg -f image2pipe -use_wallclock_as_timestamps 1`; drive nvim with `tmux send-keys`.
 - **README shots come from `docs/demo.md`.** Launch kitty with `-o background_image=none -o background_opacity=1` (transparent schemes show the wallpaper). The compositor pointer lands on the headless output; patch it out.

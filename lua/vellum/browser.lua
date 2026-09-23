@@ -6,7 +6,7 @@ local M = {}
 
 local root = debug.getinfo(1, 'S').source:sub(2):match('(.*)/lua/vellum/') .. '/render'
 local dir = vim.fn.stdpath('cache') .. '/vellum'
-local job, pending, errors, sizes = nil, {}, {}, {}
+local job, pending, errors, sizes, wanted = nil, {}, {}, {}, {}
 
 M.on_update = function() end
 
@@ -86,7 +86,20 @@ local function request(key, payload)
     payload.out = out
     job:write(vim.json.encode(payload) .. '\n')
   end
+  wanted[out] = true
   return 'pending'
+end
+
+-- Cancel queued renders the last draw did not ask for. Typing inside a
+-- diagram queues one render per keystroke, and only the newest matters.
+function M.drop_stale()
+  for out in pairs(pending) do
+    if not wanted[out] then
+      pending[out] = nil
+      job:write(vim.json.encode({ cancel = out }) .. '\n')
+    end
+  end
+  wanted = {}
 end
 
 function M.diagram(code, theme)

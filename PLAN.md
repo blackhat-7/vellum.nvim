@@ -19,3 +19,4 @@ Each line carries its own done-check.
 - [x] README showcase: `docs/hero.png`, `docs/light.png`, `docs/carbonfox.png`, shot from `docs/demo.md` in kitty at font size 14, framed with ImageMagick.
 - [x] Smooth pane resizing: images fit the width, pixels sent once, redraw after the drag settles. Done: 80-column drag in kitty + tmux on a 4-diagram doc, nvim CPU 47 → 10 ticks, no blank diagram.
 - [x] README demo GIF (`docs/demo.gif`): open, scroll, live typing with a diagram, resize. Done: recorded in kitty + tmux from `docs/demo.md`, checked frame by frame.
+- [x] Editing a diagram shows the final version fast: stale queued renders are cancelled. Done: 13 keys typed into a large flowchart, final image 3.6 s → 0.34 s after the last key (headless, real renderer).

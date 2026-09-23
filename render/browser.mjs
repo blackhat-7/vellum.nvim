@@ -102,12 +102,31 @@ async function render(req) {
   return { out: req.out };
 }
 
-// One page, so requests run strictly in order.
-let queue = Promise.resolve();
+// One page, so requests run one at a time, in order. A queued request can be
+// cancelled with {"cancel": out}: while typing in a diagram only the newest
+// version matters. Cancelled requests get no answer.
+const waiting = [];
+let running = null;
+function work() {
+  running ??= (async () => {
+    while (waiting.length) {
+      const req = waiting.shift();
+      const reply = await render(req).catch((e) => ({ out: req.out, error: String(e?.message ?? e) }));
+      process.stdout.write(JSON.stringify(reply) + '\n');
+    }
+    running = null;
+  })();
+}
 createInterface({ input: process.stdin }).on('line', (line) => {
-  queue = queue.then(async () => {
-    const req = JSON.parse(line);
-    const reply = await render(req).catch((e) => ({ out: req.out, error: String(e?.message ?? e) }));
-    process.stdout.write(JSON.stringify(reply) + '\n');
-  });
-}).on('close', () => queue.then(() => browser.close()));
+  const req = JSON.parse(line);
+  if (req.cancel) {
+    const i = waiting.findIndex((r) => r.out === req.cancel);
+    if (i >= 0) waiting.splice(i, 1);
+  } else {
+    waiting.push(req);
+    work();
+  }
+}).on('close', async () => {
+  await running;
+  await browser.close();
+});

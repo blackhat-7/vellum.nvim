@@ -50,6 +50,7 @@ local function draw()
   if not valid() then return end
   local lines
   lines, S.rows, S.margin, S.anchors = render.render(S.src, api.nvim_win_get_width(S.win), M.config.max_width)
+  browser.drop_stale()
   vim.bo[S.buf].modifiable = true
   api.nvim_buf_set_lines(S.buf, 0, -1, false, lines)
   vim.bo[S.buf].modifiable = false

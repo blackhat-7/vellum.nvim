@@ -5,6 +5,7 @@ local theme = require('vellum.theme')
 local image = require('vellum.image')
 local browser = require('vellum.browser')
 local zoom = require('vellum.zoom')
+local links = require('vellum.links')
 
 local api = vim.api
 local M = {}
@@ -137,7 +138,12 @@ function M.open()
   -- scrolloff would move the topline sync sets, and follow() would echo it back
   wo.fillchars, wo.winfixbuf, wo.scrolloff = 'eob: ', true, 0
   vim.keymap.set('n', 'q', M.close, { buffer = S.buf, desc = 'Close preview' })
-  vim.keymap.set('n', '<CR>', M.zoom, { buffer = S.buf, desc = 'Zoom the image' })
+  vim.keymap.set('n', '<CR>', function()
+    if not M.follow() then M.zoom() end
+  end, { buffer = S.buf, desc = 'Follow the link, or zoom the image' })
+  vim.keymap.set('n', 'gx', function()
+    if not M.follow() then vim.notify('vellum: no link under the cursor', vim.log.levels.INFO) end
+  end, { buffer = S.buf, desc = 'Follow the link' })
   theme.apply()
   if image.supported and not image.problem() then browser.start() end
   -- The preview falls back to text on its own; say why, once a session.
@@ -194,6 +200,23 @@ function M.close()
   settle:stop()
   if S.win and api.nvim_win_is_valid(S.win) then pcall(api.nvim_win_close, S.win, true) end
   S = {}
+end
+
+-- Follow the link under the preview's cursor. False when there is none.
+function M.follow()
+  local win = vim.fn.bufwinid(S.src)
+  if not valid() or win == -1 then return false end
+  local row, col = unpack(api.nvim_win_get_cursor(S.win))
+  for _, m in ipairs(S.rows[row] or {}) do
+    if m[5] and col >= m[1] + S.margin and col < m[2] + S.margin then
+      local err = links.follow(m[5], S.src, win)
+      if err then vim.notify('vellum: ' .. err, vim.log.levels.WARN) end
+      -- the cursor moved in the source window, which is not the current one
+      if valid() then api.nvim_win_call(win, function() sync(true) end) end
+      return true
+    end
+  end
+  return false
 end
 
 -- Open the image on the preview's cursor line full-screen. That line follows

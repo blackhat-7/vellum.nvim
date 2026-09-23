@@ -52,7 +52,13 @@ If diagrams don't show, run `:checkhealth vellum`. It checks Node, renders a tes
 
 `:Vellum` toggles the preview. It also closes once no window shows the markdown file.
 
-In the preview, `q` closes it and `<CR>` on a diagram or image opens it full-screen. There:
+In the preview:
+
+- `gx` or `<CR>` on a link follows it. Web links open in your browser, `#heading` links jump to the heading, and links to other markdown files open them in the source window (the preview follows). Other files open in their default app.
+- `<CR>` on a diagram or image opens it full-screen.
+- `q` closes the preview.
+
+Full-screen:
 
 - `+` / `-` zoom. Ctrl+wheel zooms toward the mouse pointer.
 - `hjkl`, the arrow keys or the mouse wheel pan.

@@ -154,7 +154,7 @@ local function heading(level, text, width)
   local out = { pad }
   for _, l in ipairs(inline.wrap(segs, width - 4)) do
     local line = { { '  ', 'VellumH1Band' } }
-    for _, s in ipairs(l) do line[#line + 1] = { s[1], under(s[2], 'VellumH1Band') } end
+    for _, s in ipairs(l) do line[#line + 1] = { s[1], under(s[2], 'VellumH1Band'), link = s.link } end
     line[#line + 1] = { string.rep(' ', width - 2 - inline.width(l)), 'VellumH1Band' }
     out[#out + 1] = line
   end
@@ -252,7 +252,7 @@ function R.block_quote(node, width)
       -- plain quotes dim their prose; code keeps its own colors
       local hl = s[2]
       if not alert and not s[3] then hl = under(hl, 'VellumQuote') end
-      line[#line + 1] = { s[1], hl, s[3] }
+      line[#line + 1] = { s[1], hl, s[3], link = s.link }
     end
     out[i] = line
   end
@@ -366,7 +366,7 @@ function R.pipe_table(node, width)
         local pad = cw[c] - inline.width(segs)
         local left = align[c] == 'right' and pad or align[c] == 'center' and math.floor(pad / 2) or 0
         line[#line + 1] = { string.rep(' ', left + 1), fill }
-        for _, s in ipairs(segs) do line[#line + 1] = { s[1], under(s[2], fill) } end
+        for _, s in ipairs(segs) do line[#line + 1] = { s[1], under(s[2], fill), link = s.link } end
         line[#line + 1] = { string.rep(' ', pad - left + 1), fill }
         line[#line + 1] = { '│', B }
       end
@@ -456,7 +456,7 @@ function M.render(buf, win_width, max_width)
       for _, s in ipairs(line) do
         local len = #s[1]
         local group = s[2] and theme.merge(s[2])
-        if group and len > 0 then marks[#marks + 1] = { col, col + len, group, 100 } end
+        if group and len > 0 then marks[#marks + 1] = { col, col + len, group, 100, s.link } end
         for k, m in ipairs(s[3] or {}) do marks[#marks + 1] = { col + m[1], col + m[2], m[3], 100 + k } end
         parts[#parts + 1] = s[1]
         col = col + len

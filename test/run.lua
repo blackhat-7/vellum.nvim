@@ -367,6 +367,68 @@ do
   check('placeholder cols', vim.api.nvim_strwidth(lines[2][1][1]) == 7)
 end
 
+-- links keep their destination through wrapping, tables and headings, and
+-- following one from the preview opens the URL, jumps, or opens the file
+do
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, 'p')
+  vim.fn.writefile({ '# Other', '', 'text', '', '## Deep part', '', 'here' }, dir .. '/other file.md')
+  vim.fn.writefile({
+    '# Top',
+    '',
+    'See [the web](https://example.com/a) and [a ref][r] and <https://auto.example>.',
+    '',
+    '| col |',
+    '| --- |',
+    '| [cell](#setup) |',
+    '',
+    '[far](other%20file.md#deep-part) [gone](missing.md) [dup](#setup-1)',
+    '',
+    '## Setup',
+    '',
+    '## Setup',
+    '',
+    '[r]: https://example.com/ref',
+  }, dir .. '/main.md')
+  local opened
+  local ui_open = vim.ui.open
+  vim.ui.open = function(t) opened = t end
+  local vellum = require('vellum')
+  vim.cmd('silent! only | enew! | silent! %bwipeout!')
+  vim.cmd.edit(dir .. '/main.md')
+  vellum.open()
+  local src = vim.api.nvim_get_current_win()
+  local pwin = vim.fn.bufwinid('vellum://preview')
+  local function click(label)
+    local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(pwin), 0, -1, false)
+    for i, l in ipairs(lines) do
+      local col = l:find(label, 1, true)
+      if col then
+        vim.api.nvim_win_set_cursor(pwin, { i, col - 1 })
+        return vellum.follow()
+      end
+    end
+  end
+  check('link opens its URL', click('the web') and opened == 'https://example.com/a', opened)
+  check('reference link opens its definition', click('a ref') and opened == 'https://example.com/ref', opened)
+  check('autolink opens', click('auto.example') and opened == 'https://auto.example', opened)
+  check('link in a table cell jumps to the heading', click('cell') and vim.api.nvim_win_get_cursor(src)[1] == 11)
+  check('second heading with the same name is -1', click('dup') and vim.api.nvim_win_get_cursor(src)[1] == 13)
+  check('plain text is no link', not click('Setup'))
+  check('missing file is a message, not a jump', click('gone') and vim.api.nvim_buf_get_name(0):match('main%.md$'))
+  check('relative markdown file opens at its heading', click('far') and vim.api.nvim_buf_get_name(0):match('other file%.md$')
+    and vim.api.nvim_win_get_cursor(src)[1] == 5)
+  vim.wait(50)
+  check('the preview follows the opened file', vim.fn.bufwinid('vellum://preview') ~= -1
+    and table.concat(vim.api.nvim_buf_get_lines(vim.fn.winbufnr(pwin), 0, -1, false), '\n'):find('Deep part'))
+  vim.ui.open = ui_open
+  -- a link wrapped over two lines keeps its target on both
+  local wrapped = require('vellum.inline').wrap(require('vellum.inline').parse('[one two three four](x.md)'), 9)
+  local all = #wrapped > 1
+  for _, l in ipairs(wrapped) do all = all and l[1].link == 'x.md' end
+  check('wrapped link keeps its target on every line', all, vim.inspect(wrapped))
+end
+
 -- the preview closes with its source, and follows a markdown buffer that replaces it
 do
   local vellum = require('vellum')

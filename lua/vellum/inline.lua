@@ -1,6 +1,8 @@
 -- Inline markdown → segments, and word wrap of segments into lines.
 -- A segment is { text, hl, marks }: hl is nil, a group, or a list of groups
 -- (merged, later wins); marks are extra { start, end, group } byte ranges.
+-- A link's segments also carry `link`: its destination, or { ref = label }
+-- for a reference link, resolved when followed so the block cache stays right.
 local media = require('vellum.media')
 local latex = require('vellum.latex')
 
@@ -52,7 +54,7 @@ function M.parse(text, hl)
       -- GFM autolinks bare URLs
       for a, url, b in s:gmatch('()(https?://[^%s<>]*[^%s<>%.,;:!%?%)%]\'"])()') do
         if a > i then segs[#segs + 1] = { s:sub(i, a - 1), hls } end
-        segs[#segs + 1] = { url, with(hls, 'VellumLink') }
+        segs[#segs + 1] = { url, with(hls, 'VellumLink'), link = url }
         i = b
       end
     end
@@ -115,13 +117,18 @@ function M.parse(text, hl)
       elseif t == 'latex_block' then
         formula(text:sub(cs + 1, ce), text:sub(ce + 1, ce + 1), hls)
       elseif t == 'inline_link' or t == 'full_reference_link' or t == 'collapsed_reference_link' then
-        local label = child(c, 'link_text')
+        local label, dest, ref = child(c, 'link_text'), child(c, 'link_destination'), child(c, 'link_label')
+        local link = t == 'inline_link' and (dest and slice(dest):match('^<(.*)>$') or dest and slice(dest) or '')
+          or { ref = ref and slice(ref):sub(2, -2) or label and slice(label) or '' }
+        local first = #segs + 1
         if label then walk(label, with(hls, 'VellumLink')) end
+        for k = first, #segs do segs[k].link = link end
       elseif t == 'image' then
         local alt, dest = child(c, 'image_description'), child(c, 'link_destination')
         picture(dest and (slice(dest):match('^<(.*)>$') or slice(dest)), alt and slice(alt) or 'image', hls)
       elseif t == 'uri_autolink' or t == 'email_autolink' then
-        segs[#segs + 1] = { text:sub(cs + 2, ce - 1), with(hls, 'VellumLink') }
+        local target = text:sub(cs + 2, ce - 1)
+        segs[#segs + 1] = { target, with(hls, 'VellumLink'), link = t == 'email_autolink' and 'mailto:' .. target or target }
       elseif t == 'backslash_escape' then
         push(text:sub(cs + 2, ce), hls)
       elseif t == 'entity_reference' or t == 'numeric_character_reference' then
@@ -169,23 +176,27 @@ function M.wrap(segs, width, key)
   local lines, line, w = {}, {}, 0
   local word, ww, space = {}, 0, nil
   local function newline() lines[#lines + 1], line, w = line, {}, 0 end
-  local function put(text, hl, cw)
+  local function put(text, hl, cw, link)
     local last = line[#line]
-    if last and last[2] == hl then last[1] = last[1] .. text else line[#line + 1] = { text, hl } end
+    if last and last[2] == hl and last.link == link then
+      last[1] = last[1] .. text
+    else
+      line[#line + 1] = { text, hl, link = link }
+    end
     w = w + cw
   end
   local function flush()
     if ww == 0 then return end
     if w > 0 and w + (space and 1 or 0) + ww > width then newline() end
-    if space and w > 0 then put(' ', space, 1) end
+    if space and w > 0 then put(' ', space[1], 1, space.link) end
     for _, p in ipairs(word) do
       if ww <= width then
-        put(p[1], p[2], strwidth(p[1]))
+        put(p[1], p[2], strwidth(p[1]), p.link)
       else
         for ch in p[1]:gmatch('[%z\1-\127\194-\244][\128-\191]*') do
           local cw = strwidth(ch)
           if w > 0 and w + cw > width then newline() end
-          put(ch, p[2], cw)
+          put(ch, p[2], cw, p.link)
         end
       end
     end
@@ -213,11 +224,11 @@ function M.wrap(segs, width, key)
         local a, b = t:find('^%s+', i)
         if a then
           flush()
-          space = space or s[2] or {}
+          space = space or { s[2] or {}, link = s.link }
         else
           a, b = t:find('^%S+', i)
           local piece = t:sub(a, b)
-          word[#word + 1] = { piece, s[2] }
+          word[#word + 1] = { piece, s[2], link = s.link }
           ww = ww + strwidth(piece)
         end
         i = b + 1

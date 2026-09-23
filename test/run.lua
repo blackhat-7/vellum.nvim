@@ -409,13 +409,15 @@ do
     '| --- |',
     '| [cell](#setup) |',
     '',
-    '[far](other%20file.md#deep-part) [gone](missing.md) [dup](#setup-1) [[deeper]] [[nowhere]] [[other file#Deep part|wiki]] [[100%25 done]] [snake](#snake_case-option)',
+    '[far](other%20file.md#deep-part) [gone](missing.md) [dup](#setup-1) [[deeper]] [[nowhere]] [[other file#Deep part|wiki]] [[100%25 done]] [snake](#snake_case-option) [dash](#école--vu)',
     '',
     '## Setup',
     '',
     '## Setup',
     '',
     '## snake_case option',
+    '',
+    '## École — vu',
     '',
     '[r]: https://example.com/ref',
   }, dir .. '/main.md')
@@ -457,6 +459,7 @@ do
   vim.cmd.edit(dir .. '/main.md')
   vim.wait(50)
   check('anchor keeps underscores', click('snake') and vim.api.nvim_get_current_line() == '## snake_case option')
+  check('anchor: letters kept, a dash dropped, as GitHub', click('dash') and vim.api.nvim_get_current_line() == '## École — vu')
   vim.cmd.edit(dir .. '/main.md')
   vim.wait(50)
   check('relative markdown file opens at its heading', click('far') and vim.api.nvim_buf_get_name(0):match('other file%.md$')

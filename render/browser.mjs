@@ -206,10 +206,10 @@ async function exportDoc({ markdown: text, dir, out, kinds }) {
         const title = m[2] || m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
         q.insertAdjacentHTML('afterbegin', `<p class="title">${title}</p>`);
       }
-      // GitHub's heading ids, so "#heading" links work (links.lua slug)
+      // GitHub's heading ids, so "#heading" links work; same rule as links.lua slug
       const seen = {};
       for (const h of document.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
-        const id = h.textContent.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/ /g, '-');
+        const id = h.textContent.trim().toLowerCase().replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, '').replace(/ /g, '-');
         h.id = seen[id] ? `${id}-${seen[id]}` : id;
         seen[id] = (seen[id] ?? 0) + 1;
       }

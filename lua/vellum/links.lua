@@ -16,11 +16,16 @@ local function definition(buf, label)
   return found and (found:match('^<(.*)>$') or found)
 end
 
--- GitHub's heading id: lowercase, punctuation but "-" and "_" dropped,
--- spaces to dashes. Markup (**, `) is not part of the shown text.
+-- GitHub's heading id: lowercase; letters, digits, "-", "_" kept, other
+-- punctuation, symbols and emoji dropped; spaces to dashes. Markup (**, `)
+-- is not part of the shown text. Exports use the same rule (browser.mjs).
 local function slug(text)
-  text = text:gsub('[*`]', ''):lower():gsub('[%z\1-\127]', function(c) return c:match('[%w%-_ ]') and c or '' end)
-  return (text:gsub(' ', '-'))
+  local id = {}
+  for ch in vim.fn.tolower((text:gsub('[*`]', ''))):gmatch('[%z\1-\127\194-\244][\128-\191]*') do
+    local class = #ch > 1 and vim.fn.charclass(ch) -- 1 punctuation, 3 emoji, 2 or a script number: a letter
+    if (class and class ~= 1 and class ~= 3) or (not class and ch:match('[%w%-_ ]')) then id[#id + 1] = ch == ' ' and '-' or ch end
+  end
+  return table.concat(id)
 end
 
 -- The file and heading id an Obsidian [[note#heading]] points to, or nil.

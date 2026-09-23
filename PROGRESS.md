@@ -30,4 +30,5 @@ Resizing the pane stays smooth. Math verified by eye in kitty inside tmux. `nvim
 - **Recording video:** `wf-recorder` is broken here (libavutil). Pipe `grim -g <window> -t ppm -` in a loop into `ffmpeg -f image2pipe -use_wallclock_as_timestamps 1`; drive nvim with `tmux send-keys`.
 - **Tree-sitter's `latex_block` swallows markup:** `$5 [a](b) $10` is one node; `inline.lua` re-parses after a rejected `$`. Markup spanning the second `$` (`**$10**`) still shows raw.
 - **Renderer page must stay in standards mode** (`<!DOCTYPE html>`) for KaTeX; mermaid SVGs are `display:block` there to keep diagram sizes unchanged.
+- **Measuring redraw cost:** the UI is its own `nvim` process (the server is `nvim --embed`); its `/proc/<pid>/io` `wchar` is bytes sent to the terminal. `pgrep -f` also matches the tmux/shell wrappers.
 - **README shots come from `docs/demo.md`.** Launch kitty with `-o background_image=none -o background_opacity=1` (transparent schemes show the wallpaper). The compositor pointer lands on the headless output; patch it out.

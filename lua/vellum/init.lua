@@ -96,7 +96,10 @@ function M.open()
 
   local au = function(ev, fn, opts) api.nvim_create_autocmd(ev, vim.tbl_extend('force', { group = group, callback = fn }, opts or {})) end
   au({ 'TextChanged', 'TextChangedI', 'TextChangedP' }, function(ev) if ev.buf == S.src then update() end end)
-  au({ 'CursorMoved', 'CursorMovedI', 'WinScrolled' }, sync)
+  au({ 'CursorMoved', 'CursorMovedI' }, sync)
+  -- only when the source scrolled: a mouse wheel over the preview fires this
+  -- too, from the source window, and syncing would snap the preview back
+  au('WinScrolled', function() if vim.v.event[tostring(api.nvim_get_current_win())] then sync() end end)
   au('WinResized', resized)
   au('BufEnter', function(ev)
     if ev.buf ~= S.src and vim.bo[ev.buf].filetype == 'markdown' then

@@ -32,3 +32,4 @@ Resizing the pane stays smooth. Math verified by eye in kitty inside tmux. `nvim
 - **Renderer page must stay in standards mode** (`<!DOCTYPE html>`) for KaTeX; mermaid SVGs are `display:block` there to keep diagram sizes unchanged.
 - **Measuring redraw cost:** the UI is its own `nvim` process (the server is `nvim --embed`); its `/proc/<pid>/io` `wchar` is bytes sent to the terminal. `pgrep -f` also matches the tmux/shell wrappers.
 - **README shots come from `docs/demo.md`.** Launch kitty with `-o background_image=none -o background_opacity=1` (transparent schemes show the wallpaper). The compositor pointer lands on the headless output; patch it out.
+- **`WinScrolled` fires in the current window for any window that scrolled** (a mouse wheel over the preview). Check `v:event` for the window. `nvim -l` never fires it; test under `-c luafile` with `vim.defer_fn`.

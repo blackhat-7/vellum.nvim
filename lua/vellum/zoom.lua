@@ -50,7 +50,7 @@ function M.open(path)
     for i, l in ipairs(cells) do
       api.nvim_buf_set_extmark(buf, ns, top + i - 1, #pad, { end_col = #pad + #l[1][1], hl_group = l[1][2] })
     end
-    vim.wo[win].winbar = ('%%#VellumMuted# %d%%%%%s  +/- zoom · hjkl/wheel pan · 0 fit · q close'):format(z * 100 + 0.5, max and ' (max)' or '')
+    vim.wo[win].winbar = ('%%#VellumMuted# %d%%%%%s  +/-/ctrl-wheel zoom · hjkl/wheel pan · 0 fit · q close'):format(z * 100 + 0.5, max and ' (max)' or '')
   end
 
   local function layout()
@@ -89,8 +89,23 @@ function M.open(path)
       fx, fy = fx + dx * w / cols, fy + dy * h / rows
     end
   end
-  map({ '+', '=' }, function() z = z * STEP end)
-  map({ '-' }, function() z = math.max(1, z / STEP) end)
+  -- Zoom by factor k, keeping the image point under the mouse (or the
+  -- view's center) where it is.
+  local function zoom(k, mouse)
+    return function()
+      local w, h, cols, rows = size()
+      local m, dx, dy = vim.fn.getmousepos(), 0, 0
+      if mouse and m.winid == win then dx, dy = m.wincol - 1 - w / 2, m.winrow - 2 - h / 2 end -- winrow 1 is the winbar
+      local px, py = fx + dx / cols, fy + dy / rows
+      z = math.max(1, z * k)
+      _, _, cols, rows = size()
+      fx, fy = px - dx / cols, py - dy / rows
+    end
+  end
+  map({ '+', '=' }, zoom(STEP))
+  map({ '-' }, zoom(1 / STEP))
+  map({ '<C-ScrollWheelUp>' }, zoom(STEP, true))
+  map({ '<C-ScrollWheelDown>' }, zoom(1 / STEP, true))
   map({ '0' }, function() z, fx, fy = 1, 0.5, 0.5 end)
   map({ 'h', '<Left>' }, pan(-0.25, 0))
   map({ 'l', '<Right>' }, pan(0.25, 0))

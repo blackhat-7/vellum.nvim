@@ -31,7 +31,7 @@ end
 -- The PNG showing image `src` (local path or http(s) URL): file, width,
 -- height, density. Nil while it renders or when it cannot be shown.
 local function load(src)
-  if not image.supported or image.problem then return nil end
+  if not image.supported or image.problem() then return nil end
   local remote, version = src:match('^https?://'), os.date('%F') -- remote images refresh daily
   if not remote then
     if src:match('^%a[%w+.-]*:') then return nil end

@@ -37,6 +37,7 @@ local send -- below; a restarted renderer resends through it
 -- Returns an error message, or nil.
 function M.start()
   if job then return end
+  if vim.fn.executable('node') == 0 then return 'node not found: diagrams need Node.js 20.6 or newer' end
   if not vim.uv.fs_stat(root .. '/node_modules') then return 'renderer not built: run :Lazy build vellum.nvim' end
   vim.fn.mkdir(dir, 'p')
   local partial, stderr, answered = '', '', false

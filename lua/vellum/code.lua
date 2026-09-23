@@ -75,7 +75,7 @@ function M.panel(code, lang, width, label, err)
 end
 
 function M.diagram(code, width, row)
-  if image.problem then return M.panel(code, 'mermaid', width, nil, image.problem) end
+  if image.problem() then return M.panel(code, 'mermaid', width, nil, image.problem()) end
   local state, a, b = browser.diagram(code, theme)
   if state == 'ready' then
     last_diagram[row] = media.picture(a, b[1], b[2], width, 2)

@@ -332,7 +332,7 @@ do
   png('wide.png', 9000, 600)
   png('small.png', 200, 100)
   png('badge.png', 80, 20)
-  image.supported, image.problem = true, nil
+  image.supported, vim.o.termguicolors = true, true
   local cw, ch = image.cell()
   local lines = doc('![w](' .. dir .. '/wide.png)\n\n![s](' .. dir .. '/small.png)', 84)
   local badges = doc('CI [![ci](' .. dir .. '/badge.png)](x) <img src="' .. dir .. '/badge.png"> ok\n\nsee ![s](' .. dir .. '/small.png) below', 84)
@@ -350,6 +350,14 @@ do
   check('badges sit in the text line', row and row:find('ok$') and select(2, row:gsub(ph, '')) == 2 * cells, row)
   local i = find(badges, '^%s*see$')
   check('big image in text gets its own lines', i and badges[i + 1]:find(ph) and find(badges, '^%s*below$'), vim.inspect(badges))
+end
+
+-- images need 'termguicolors', read when used: Neovim may set it after startup
+do
+  vim.o.termguicolors = false
+  check('no termguicolors, no images', (image.problem() or ''):find('termguicolors'))
+  vim.o.termguicolors = true
+  check('termguicolors on', image.problem() == nil or image.problem():find('tmux'))
 end
 
 -- image placeholders are exactly cols wide

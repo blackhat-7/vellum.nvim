@@ -13,6 +13,7 @@ M.config = { max_width = 100 }
 
 local ns = api.nvim_create_namespace('vellum')
 local group = api.nvim_create_augroup('vellum', { clear = true })
+local warned = false -- told the user why images cannot show
 local S = {} -- win, buf: the preview · src: the markdown buffer · rows, margin: highlights · anchors: scroll map
 
 -- Highlights are applied only to lines being drawn, so a redraw costs the
@@ -138,7 +139,14 @@ function M.open()
   vim.keymap.set('n', 'q', M.close, { buffer = S.buf, desc = 'Close preview' })
   vim.keymap.set('n', '<CR>', M.zoom, { buffer = S.buf, desc = 'Zoom the image' })
   theme.apply()
-  if image.supported and not image.problem then browser.start() end
+  if image.supported and not image.problem() then browser.start() end
+  -- The preview falls back to text on its own; say why, once a session.
+  local why = not image.supported and "this terminal can't show images (kitty and Ghostty can), so diagrams show as code"
+    or image.problem()
+  if why and not warned then
+    warned = true
+    vim.notify('vellum: ' .. why .. '\nMore: :checkhealth vellum', vim.log.levels.WARN)
+  end
 
   local au = function(ev, fn, opts) api.nvim_create_autocmd(ev, vim.tbl_extend('force', { group = group, callback = fn }, opts or {})) end
   au({ 'TextChanged', 'TextChangedI', 'TextChangedP' }, function(ev) if ev.buf == S.src then update() end end)

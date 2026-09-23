@@ -46,6 +46,8 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 lazy runs `build.lua` on install. It installs the diagram renderer: `npm ci` and a small headless Chrome download.
 
+If diagrams don't show, run `:checkhealth vellum`. It checks Node, renders a test diagram, and says what your terminal or tmux setup is missing.
+
 ## Use
 
 `:Vellum` toggles the preview. It also closes once no window shows the markdown file.

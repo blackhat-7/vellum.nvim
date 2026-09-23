@@ -36,28 +36,40 @@ local PLACEHOLDER = vim.fn.nr2char(0x10EEEE)
 M.max_cells = #DIACRITICS -- per row and per column
 
 -- Which terminal draws the images, and whether it can. Inside tmux (often
--- over ssh, where env vars lie) tmux reports the attached terminal. tmux also
--- downgrades 24-bit color unless told the terminal has it, and a placeholder's
--- color *is* its image id, so without RGB images would silently vanish.
+-- over ssh, where env vars lie) tmux reports the attached terminal. A
+-- placeholder's color *is* its image id, so without 24-bit color (tmux's RGB
+-- feature, 'termguicolors') images silently vanish; tmux also drops the
+-- image data unless allow-passthrough is on.
+local function tmux(args)
+  local ok, r = pcall(function() return vim.system(vim.list_extend({ 'tmux' }, args), { text = true }):wait() end)
+  return ok and r.code == 0 and vim.trim(r.stdout) or ''
+end
+
+local tmux_problem
+
 local function detect()
   local env = (vim.env.TERM or '') .. (vim.env.TERM_PROGRAM or '')
   local local_term = vim.env.KITTY_WINDOW_ID or vim.env.GHOSTTY_RESOURCES_DIR or env:find('kitty') or env:find('ghostty')
-  local client = ''
-  if vim.env.TMUX then
-    local ok, r = pcall(function()
-      return vim.system({ 'tmux', 'display', '-p', '#{client_termtype}\t#{client_termfeatures}\t#{client_termname}' }, { text = true }):wait()
-    end)
-    client = ok and r.code == 0 and r.stdout or ''
-  end
-  local kind, features, name = unpack(vim.split(vim.trim(client), '\t'))
+  local client = vim.env.TMUX and tmux({ 'display', '-p', '#{client_termtype}\t#{client_termfeatures}\t#{client_termname}' }) or ''
+  local kind, features, name = unpack(vim.split(client, '\t'))
   M.supported = vim.api.nvim_ui_send ~= nil
     and (local_term or (kind or ''):lower():find('kitty') or (kind or ''):lower():find('ghostty')) ~= nil
-  M.problem = nil
-  if M.supported and vim.env.TMUX and features and not features:find('RGB') then
-    M.problem = ("tmux isn't passing 24-bit color, so images can't show. Add to tmux.conf:\nset -as terminal-features ',%s:RGB'\nthen detach and re-attach."):format(name or 'xterm-256color')
+  tmux_problem = nil
+  if not M.supported or not vim.env.TMUX then return end
+  if features and not features:find('RGB') then
+    tmux_problem = ("tmux isn't passing 24-bit color, so images can't show. Add to tmux.conf:\nset -as terminal-features ',%s:RGB'\nthen detach and re-attach."):format(name or 'xterm-256color')
+  elseif tmux({ 'show', '-Apv', '-t', vim.env.TMUX_PANE or '', 'allow-passthrough' }) == 'off' then
+    tmux_problem = "tmux blocks the image data. Add to tmux.conf:\nset -g allow-passthrough on\nthen run: tmux source-file ~/.tmux.conf"
   end
 end
 detect()
+
+-- Why a supported terminal still cannot show images, or nil. 'termguicolors'
+-- is read each time: Neovim may switch it on after startup.
+function M.problem()
+  if not vim.o.termguicolors then return "images need 'termguicolors'. Add to your config:\nvim.o.termguicolors = true" end
+  return tmux_problem
+end
 
 local sent = {} -- image id -> size of its placement, 'COLSxROWS'
 local ffi = require('ffi')

@@ -306,7 +306,7 @@ function M.reset() last = {} end
 -- version under `key` is ready) or where pictures cannot show; nil, error
 -- when KaTeX rejects it.
 function M.picture(tex, width, key)
-  if not image.supported or image.problem then return nil end
+  if not image.supported or image.problem() then return nil end
   local state, a, b = browser.math(tex, theme.math)
   if state == 'ready' then
     local lines = media.picture(a, b[1], b[2], width, 2)

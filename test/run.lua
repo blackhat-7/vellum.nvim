@@ -391,7 +391,13 @@ end
 do
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, 'p')
-  vim.fn.writefile({ '# Other', '', 'text', '', '## Deep part', '', 'here' }, dir .. '/other file.md')
+  -- long, so the preview has to scroll to reach the heading
+  local other = { '# Other', '' }
+  for k = 1, 150 do other[#other + 1] = 'filler ' .. k end
+  vim.list_extend(other, { '', '## Deep part', '', 'here' })
+  vim.fn.writefile(other, dir .. '/other file.md')
+  vim.fn.writefile({ '# Done' }, dir .. '/100%25 done.md')
+  vim.fn.mkdir(dir .. '/.obsidian', 'p') -- a vault: wikilinks may search its folders
   vim.fn.mkdir(dir .. '/sub', 'p')
   vim.fn.writefile({ '# Deeper note' }, dir .. '/sub/deeper.md')
   vim.fn.writefile({
@@ -403,11 +409,13 @@ do
     '| --- |',
     '| [cell](#setup) |',
     '',
-    '[far](other%20file.md#deep-part) [gone](missing.md) [dup](#setup-1) [[deeper]] [[nowhere]] [[other file#Deep part|wiki]]',
+    '[far](other%20file.md#deep-part) [gone](missing.md) [dup](#setup-1) [[deeper]] [[nowhere]] [[other file#Deep part|wiki]] [[100%25 done]] [snake](#snake_case-option)',
     '',
     '## Setup',
     '',
     '## Setup',
+    '',
+    '## snake_case option',
     '',
     '[r]: https://example.com/ref',
   }, dir .. '/main.md')
@@ -442,14 +450,29 @@ do
   vim.cmd.edit(dir .. '/main.md')
   vim.wait(50)
   check('wikilink opens the note at its heading', click('wiki') and vim.api.nvim_buf_get_name(0):match('other file%.md$')
-    and vim.api.nvim_win_get_cursor(src)[1] == 5)
+    and vim.api.nvim_win_get_cursor(src)[1] == #other - 2)
+  vim.cmd.edit(dir .. '/main.md')
+  vim.wait(50)
+  check('wikilink name is a file name, not a URL', click('100%25 done') and vim.api.nvim_buf_get_name(0):match('100%%25 done%.md$'))
+  vim.cmd.edit(dir .. '/main.md')
+  vim.wait(50)
+  check('anchor keeps underscores', click('snake') and vim.api.nvim_get_current_line() == '## snake_case option')
   vim.cmd.edit(dir .. '/main.md')
   vim.wait(50)
   check('relative markdown file opens at its heading', click('far') and vim.api.nvim_buf_get_name(0):match('other file%.md$')
-    and vim.api.nvim_win_get_cursor(src)[1] == 5)
+    and vim.api.nvim_win_get_cursor(src)[1] == #other - 2)
+  local plines = vim.api.nvim_buf_get_lines(vim.fn.winbufnr(pwin), 0, -1, false)
+  local at = find(plines, 'Deep part')
+  check('the preview shows the opened file at the heading', at and vim.fn.line('w0', pwin) <= at and at <= vim.fn.line('w$', pwin),
+    at and ('heading at %d, view %d-%d'):format(at, vim.fn.line('w0', pwin), vim.fn.line('w$', pwin)))
+  -- outside a vault only the note's own folder is looked in
+  local loose = vim.fn.tempname()
+  vim.fn.mkdir(loose .. '/sub', 'p')
+  vim.fn.writefile({ '# Deeper' }, loose .. '/sub/deeper.md')
+  vim.fn.writefile({ '[[deeper]]' }, loose .. '/main.md')
+  vim.cmd.edit(loose .. '/main.md')
   vim.wait(50)
-  check('the preview follows the opened file', vim.fn.bufwinid('vellum://preview') ~= -1
-    and table.concat(vim.api.nvim_buf_get_lines(vim.fn.winbufnr(pwin), 0, -1, false), '\n'):find('Deep part'))
+  check('no vault, no folder search', click('deeper') and vim.api.nvim_buf_get_name(0):match('main%.md$'))
   vim.ui.open = ui_open
   -- a link wrapped over two lines keeps its target on both
   local wrapped = require('vellum.inline').wrap(require('vellum.inline').parse('[one two three four](x.md)'), 9)

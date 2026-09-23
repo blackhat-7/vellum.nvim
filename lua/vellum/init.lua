@@ -209,10 +209,15 @@ function M.follow()
   local row, col = unpack(api.nvim_win_get_cursor(S.win))
   for _, m in ipairs(S.rows[row] or {}) do
     if m[5] and col >= m[1] + S.margin and col < m[2] + S.margin then
+      local src = S.src
       local err = links.follow(m[5], S.src, win)
       if err then vim.notify('vellum: ' .. err, vim.log.levels.WARN) end
-      -- the cursor moved in the source window, which is not the current one
-      if valid() then api.nvim_win_call(win, function() sync(true) end) end
+      if valid() then
+        -- another file must be rendered before the preview can scroll to its heading
+        if S.src ~= src then draw() end
+        -- the cursor moved in the source window, which is not the current one
+        api.nvim_win_call(win, function() sync(true) end)
+      end
       return true
     end
   end

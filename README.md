@@ -46,6 +46,14 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 lazy runs `build.lua` on install. It installs the diagram renderer: `npm ci` and a small headless Chrome download.
 
+If you don't use lazy, that build step never runs, so run it once. In Neovim:
+
+```vim
+:Vellum build
+```
+
+It opens a terminal that installs the renderer, so you can watch npm and the Chrome download work. Wait for it to finish. Re-run it after pulling changes that touch `build.lua` or `render/`. Then `:checkhealth vellum` confirms it worked.
+
 If diagrams don't show, run `:checkhealth vellum`. It checks Node, renders a test diagram, and says what your terminal or tmux setup is missing.
 
 ## Use

@@ -2,13 +2,13 @@
 
 ## Where things stand
 
-Working plugin, public at github.com/blackhat-7/vellum.nvim, released as v0.2.0. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor; scrolling the preview scrolls the source. `<CR>` on an image in the preview opens it full-screen (`zoom.lua`); `gx`/`<CR>` on a link follows it (`links.lua`). `:Vellum export` writes PDF or HTML (renderer + `marked`). `:checkhealth vellum` (`health.lua`) renders a test diagram and says why images can't show. Obsidian callouts, `==highlight==` and `[[wikilinks]]` render. Keystroke cost: 0.23 ms for a README, ~6.8 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings, paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists, quotes, GitHub alerts, footnotes, tables, code with syntax colors, front matter, HTML blocks, `<details>` summaries (`▾`), images (block, or inline one row high for badges), mermaid diagrams, math.
+Working plugin, public at github.com/blackhat-7/vellum.nvim, released as v0.2.0. `:Vellum` opens the preview; it re-renders on every edit and follows the cursor; scrolling the preview scrolls the source. `<CR>` on an image in the preview opens it full-screen (`zoom.lua`); `gx`/`<CR>` on a link follows it (`links.lua`). `:Vellum build` opens a terminal and installs the renderer (npm + headless Chrome). `:Vellum export` writes PDF or HTML (renderer + `marked`). `:checkhealth vellum` (`health.lua`) renders a test diagram and says why images can't show. Obsidian callouts, `==highlight==` and `[[wikilinks]]` render. Keystroke cost: 0.23 ms for a README, ~6.8 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings, paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists, quotes, GitHub alerts, footnotes, tables, code with syntax colors, front matter, HTML blocks, `<details>` summaries (`▾`), images (block, or inline one row high for badges), mermaid diagrams, math.
 
 Math: inline `$…$` becomes Unicode text (`latex.lua`); `$$…$$` and ```` ```math ```` become KaTeX pictures through the same headless browser as mermaid, with the text form while rendering or without kitty graphics. `$5 and $10` stays text.
 
 Rendering is split by job: `render.lua` (blocks), `inline.lua` (inline text, wrap), `code.lua` (code panels, diagrams), `media.lua` (images), `latex.lua` (math). The renderer starts on `:Vellum`; the PNG cache is capped at 100 MB.
 
-Resizing the pane stays smooth. The renderer restarts after a crash. `nvim --clean -l test/run.lua`: 142 checks green.
+Resizing the pane stays smooth. The renderer restarts after a crash. `nvim --clean -l test/run.lua`: 144 checks green.
 
 ## What's next
 

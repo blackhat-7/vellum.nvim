@@ -46,6 +46,14 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 lazy runs `build.lua` on install. It installs the diagram renderer: `npm ci` and a small headless Chrome download.
 
+If you don't use lazy, that build step never runs, so run it once. In Neovim:
+
+```vim
+:Vellum build
+```
+
+It opens a terminal that installs the renderer, so you can watch npm and the Chrome download work. Wait for it to finish. Re-run it after pulling changes that touch `build.lua` or `render/`. Then `:checkhealth vellum` confirms it worked.
+
 With Nix, the flake's `packages.<system>.plugin` comes with the renderer and a browser built in (Linux and Apple Silicon Macs). Node must be on your `PATH`. For [nixvim](https://github.com/nix-community/nixvim), the module adds both:
 
 ```nix

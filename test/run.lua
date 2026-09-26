@@ -501,6 +501,16 @@ do
   vim.cmd('runtime plugin/vellum.lua') -- nvim -l loads no plugin files
   vim.cmd('Vellum nonsense')
   check('unknown subcommand', said and said:find('unknown command'), said)
+  -- build is wired to the renderer build; stubbed, so no terminal opens here
+  local ran = false
+  package.loaded['vellum.build'] = { run = function() ran = true end }
+  vim.cmd('Vellum build')
+  check(':Vellum build runs the renderer build', ran, said)
+  package.loaded['vellum.build'] = nil
+  local build = dofile('lua/vellum/build.lua')
+  check('renderer build installs deps then the headless shell',
+    build.commands[1][1] == 'npm' and build.commands[2][1] == 'npx'
+      and vim.fn.fnamemodify(build.root, ':t') == 'vellum.nvim', vim.inspect({ build.root, build.commands }))
   vim.notify = notify
 end
 

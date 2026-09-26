@@ -16,7 +16,7 @@ local function renderer()
   if state == 'ready' then
     h.ok('renderer works (mermaid diagram rendered)')
   else
-    h.error('renderer failed: ' .. (err or 'no answer in 20 s'), { 'Rebuild it: :Lazy build vellum.nvim' })
+    h.error('renderer failed: ' .. (err or 'no answer in 20 s'), { 'Rebuild it: :Vellum build' })
   end
 end
 

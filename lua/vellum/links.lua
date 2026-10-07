@@ -82,7 +82,7 @@ function M.follow(link, buf, win)
   if path ~= '' then
     path = vim.fs.normalize(path)
     if not vim.uv.fs_stat(path) then return 'no such file: ' .. path end
-    if not path:lower():match('%.md$') and not path:lower():match('%.markdown$') then return select(2, vim.ui.open(path)) end
+    if not path:lower():match('%.mdx?$') and not path:lower():match('%.markdown$') then return select(2, vim.ui.open(path)) end
     local ok, err = pcall(vim.api.nvim_win_call, win, function() vim.cmd.edit(vim.fn.fnameescape(path)) end)
     if not ok then return (tostring(err):gsub('^.-(E%d+:)', '%1')) end
     buf = vim.api.nvim_win_get_buf(win)

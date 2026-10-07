@@ -6,6 +6,7 @@ local inline = require('vellum.inline')
 local media = require('vellum.media')
 local code = require('vellum.code')
 local latex = require('vellum.latex')
+local mdx = require('vellum.mdx')
 
 local ts = vim.treesitter
 local strwidth = vim.api.nvim_strwidth
@@ -435,12 +436,14 @@ function R.fallback(node, width) return inline.wrap({ { text_of(node, node), { '
 -- per-row marks { col, end_col, group, priority } (columns exclude the left
 -- margin), the margin width, and anchors for scroll sync.
 function M.render(buf, win_width, max_width)
-  src = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local stripped
+  src, stripped = mdx.lines(buf)
   media.dir = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':p:h')
   local width = math.max(20, math.min(win_width - 4, max_width))
   local margin = string.rep(' ', math.max(0, math.floor((win_width - width) / 2)))
   depth = 0
-  local root = ts.get_parser(buf, 'markdown'):parse()[1]:root()
+  local parser = stripped and ts.get_string_parser(table.concat(src, '\n'), 'markdown') or ts.get_parser(buf, 'markdown')
+  local root = parser:parse()[1]:root()
   if root:has_error() then
     -- tree-sitter-markdown gives up on table rows with an empty cell written
     -- "||", or with every cell empty ("|  |  |"), dropping rows GitHub shows.

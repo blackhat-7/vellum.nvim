@@ -315,7 +315,60 @@ do
   vim.wait(50)
   vellum.toggle()
   check('reopens after :close', #vim.api.nvim_tabpage_list_wins(0) == 2)
+  pbuf = vim.fn.bufnr('vellum://preview')
+  vim.cmd('enew')
+  vim.bo.filetype = 'markdown.mdx' -- MDX as some configs set it up
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'Four' })
+  vim.api.nvim_exec_autocmds('BufEnter', { buffer = 0 })
+  vellum.redraw()
+  check('follows an mdx buffer', shown('Four'))
   vellum.close()
+end
+
+-- MDX: import/export statements and {/* comments */} are hidden, in place;
+-- the same words in code, quotes or prose, and in a .md file, stay
+do
+  local text = table.concat({
+    'import { Chart } from "./chart"',
+    'export const meta = {',
+    '  title: "x",',
+    '}',
+    '',
+    '# Title',
+    '',
+    '{/* a hidden note */}',
+    '',
+    'Words like import stay in prose.',
+    '',
+    '```js',
+    'import x from "y"',
+    '```',
+    '',
+    '> export in a quote stays',
+    '',
+    '## Sub',
+    '',
+    'export default Layout',
+  }, '\n')
+  local function shows(name)
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_name(buf, vim.fn.tempname() .. name)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(text, '\n'))
+    render.reset()
+    local lines, _, _, anchors = render.render(buf, 84, 100)
+    return function(pat) return find(lines, pat) ~= nil end, anchors
+  end
+  local has, anchors = shows('.mdx')
+  check('mdx import hidden', not has('Chart'))
+  check('mdx multi-line export hidden', not has('meta') and not has('title'))
+  check('mdx export in a section hidden', not has('Layout'))
+  check('mdx comment hidden', not has('hidden note'))
+  check('mdx keeps headings and prose', has('Title') and has('Sub') and has('like import stay'))
+  check('mdx keeps code', has('import x from'))
+  check('mdx keeps quotes', has('export in a quote'))
+  check('mdx rows stay put', anchors[1] and anchors[1][1] == 5, vim.inspect(anchors[1]))
+  has = shows('.md')
+  check('markdown shows the same text', has('Chart') and has('hidden note'))
 end
 
 -- images: a small one stays centered at natural size, a very wide one
@@ -409,7 +462,7 @@ do
     '| --- |',
     '| [cell](#setup) |',
     '',
-    '[far](other%20file.md#deep-part) [gone](missing.md) [dup](#setup-1) [[deeper]] [[nowhere]] [[other file#Deep part|wiki]] [[100%25 done]] [snake](#snake_case-option) [dash](#école--vu)',
+    '[far](other%20file.md#deep-part) [gone](missing.md) [dup](#setup-1) [[deeper]] [[nowhere]] [[other file#Deep part|wiki]] [[100%25 done]] [snake](#snake_case-option) [dash](#école--vu) [mdx page](page.mdx)',
     '',
     '## Setup',
     '',
@@ -421,6 +474,7 @@ do
     '',
     '[r]: https://example.com/ref',
   }, dir .. '/main.md')
+  vim.fn.writefile({ '# Page' }, dir .. '/page.mdx')
   local opened
   local ui_open = vim.ui.open
   vim.ui.open = function(t) opened = t end
@@ -462,6 +516,9 @@ do
   check('anchor: letters kept, a dash dropped, as GitHub', click('dash') and vim.api.nvim_get_current_line() == '## École — vu')
   vim.cmd.edit(dir .. '/main.md')
   vim.wait(50)
+  check('mdx file opens in the editor', click('mdx page') and vim.api.nvim_buf_get_name(0):match('page%.mdx$'), opened)
+  vim.cmd.edit(dir .. '/main.md')
+  vim.wait(50)
   check('relative markdown file opens at its heading', click('far') and vim.api.nvim_buf_get_name(0):match('other file%.md$')
     and vim.api.nvim_win_get_cursor(src)[1] == #other - 2)
   local plines = vim.api.nvim_buf_get_lines(vim.fn.winbufnr(pwin), 0, -1, false)
@@ -497,6 +554,11 @@ do
   said = nil
   require('vellum').export('out.docx')
   check('export needs .pdf or .html', said and said:find('%.pdf or %.html'), said)
+  said = nil
+  vim.cmd('enew')
+  vim.bo.filetype = 'markdown.mdx'
+  require('vellum').export('out.docx')
+  check('export takes mdx', said and said:find('%.pdf or %.html'), said)
   said = nil
   vim.cmd('runtime plugin/vellum.lua') -- nvim -l loads no plugin files
   vim.cmd('Vellum nonsense')

@@ -6,6 +6,7 @@ local image = require('vellum.image')
 local browser = require('vellum.browser')
 local zoom = require('vellum.zoom')
 local links = require('vellum.links')
+local mdx = require('vellum.mdx')
 
 local api = vim.api
 local M = {}
@@ -200,7 +201,7 @@ function M.open()
           end
         end
       end))
-    elseif ev.buf ~= S.src and vim.bo[ev.buf].filetype == 'markdown' then
+    elseif ev.buf ~= S.src and mdx.markdown(ev.buf) then
       S.src = ev.buf
       if M.config.tab then tabkeys(ev.buf) end
       update()
@@ -295,7 +296,7 @@ end
 function M.export(path)
   local buf = api.nvim_get_current_buf()
   if buf == S.buf then buf = S.src end
-  if not buf or vim.bo[buf].filetype ~= 'markdown' then
+  if not buf or not mdx.markdown(buf) then
     return vim.notify('vellum: export works on a markdown buffer', vim.log.levels.ERROR)
   end
   local name = api.nvim_buf_get_name(buf)
@@ -304,7 +305,7 @@ function M.export(path)
     return vim.notify('vellum: export to a .pdf or .html file, e.g. :Vellum export notes.pdf', vim.log.levels.ERROR)
   end
   vim.notify('vellum: exporting to ' .. path .. ' …')
-  local text = table.concat(api.nvim_buf_get_lines(buf, 0, -1, false), '\n')
+  local text = table.concat((mdx.lines(buf)), '\n')
   local dir = name ~= '' and vim.fs.dirname(vim.fn.fnamemodify(name, ':p')) or vim.fn.getcwd()
   local kinds = {} -- callout type → its color, as in the preview
   for kind, a in pairs(render.alerts) do kinds[kind:lower()] = a[2]:lower() end

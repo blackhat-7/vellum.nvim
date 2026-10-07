@@ -46,7 +46,7 @@ nvim --clean -u test/init.lua test/sample.md -c Vellum # try it by hand
 ## Project rules
 
 - **Instant.** Typing must never wait on the preview. Unchanged blocks come from the cache; diagrams render off-thread.
-- **The preview never lies.** Every source construct renders, or falls back to its dimmed source text. Nothing silently vanishes except HTML comments and link definitions.
+- **The preview never lies.** Every source construct renders, or falls back to its dimmed source text. Nothing silently vanishes except HTML comments, link definitions, and MDX `import`/`export` lines and `{/* comments */}`.
 - **Colors come from the colorscheme.** Never hardcode a palette in Lua rendering code; add a group in `theme.lua`.
 - **Keep it small.** A file past ~500 lines gets split. No new dependency without a DECISIONS.md entry.
 - **Never weaken a test, type or check to get green.** Changing an assertion needs a stated reason in the commit.

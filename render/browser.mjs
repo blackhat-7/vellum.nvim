@@ -14,6 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer';
 
 const SCALE = 2; // device pixels per CSS px; kitty downsamples, so text stays crisp
+const VIEWPORT = { width: 800, height: 800 };
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.avif': 'image/avif' };
 
 const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox'] }).catch((e) => {
@@ -24,7 +25,7 @@ const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox
 // without Chrome every render would fail; exiting lets the plugin start a new one
 browser.on('disconnected', () => process.exit(1));
 const page = await browser.newPage();
-await page.setViewport({ width: 800, height: 800, deviceScaleFactor: SCALE });
+await page.setViewport({ ...VIEWPORT, deviceScaleFactor: SCALE });
 await page.setContent(`<!DOCTYPE html><body style="margin:0;background:transparent">
   <div id="c" style="display:inline-block;padding:12px"></div></body>`);
 await page.addScriptTag({ path: fileURLToPath(import.meta.resolve('mermaid/dist/mermaid.min.js')) });
@@ -263,14 +264,49 @@ async function exportDoc({ markdown: text, dir, out, kinds }) {
   }
 }
 
+// Device pixels per CSS px for a shot of width x height CSS px: SCALE, or
+// less when the PNG would hold more than maxPixels. Some terminal
+// multiplexers silently drop big images (herdr: over about 5.9 megapixels).
+// A pixel more each way covers the clip's rounding to whole CSS px.
+const scaleFor = (width, height, maxPixels) =>
+  maxPixels ? Math.min(SCALE, Math.sqrt(maxPixels / ((Math.ceil(width) + 1) * (Math.ceil(height) + 1)))) : SCALE;
+
+// CRC-32 of a PNG chunk's type and data, by hand: zlib.crc32 needs Node 22.2.
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  for (let k = 0; k < 8; k++) n = n & 1 ? 0xedb88320 ^ (n >>> 1) : n >>> 1;
+  return n >>> 0;
+});
+const crc32 = (bytes) => ~bytes.reduce((c, b) => CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8), ~0) >>> 0;
+
+// `png` with a pHYs chunk after its IHDR recording `scale` pixels per CSS px
+// (CSS has 96 px per inch), so the plugin shows a capped PNG at its CSS size.
+function withDensity(png, scale) {
+  const ppm = Math.round(scale * 96 / 0.0254);
+  const chunk = Buffer.alloc(21);
+  chunk.writeUInt32BE(9, 0);
+  chunk.write('pHYs', 4, 'latin1');
+  chunk.writeUInt32BE(ppm, 8);
+  chunk.writeUInt32BE(ppm, 12);
+  chunk[16] = 1; // the unit is the metre
+  chunk.writeUInt32BE(crc32(chunk.subarray(4, 17)), 17);
+  const ihdrEnd = 33; // 8-byte signature, then IHDR: length, type, 13 bytes, CRC
+  return Buffer.concat([png.subarray(0, ihdrEnd), chunk, png.subarray(ihdrEnd)]);
+}
+
 async function render(req) {
   if (req.markdown != null) return exportDoc(req);
   // diagrams keep the container's padding; images and math are shot at their own size
   const [draw, shot] = req.image ? [picture, '#c img'] : req.math != null ? [formula, '#m'] : [diagram, '#c'];
   const error = await draw(req);
   if (error) return { out: req.out, error };
+  const element = await page.$(shot);
+  const { width, height } = await element.boundingBox();
+  // set for every shot: the page is shared, so a capped scale must not stick
+  const scale = scaleFor(width, height, req.maxPixels);
+  await page.setViewport({ ...VIEWPORT, deviceScaleFactor: scale });
+  const png = Buffer.from(await element.screenshot({ omitBackground: true }));
   // write then rename, so a killed process never leaves a half PNG in the cache
-  await (await page.$(shot)).screenshot({ path: req.out + '.tmp.png', omitBackground: true });
+  writeFileSync(req.out + '.tmp.png', withDensity(png, scale));
   renameSync(req.out + '.tmp.png', req.out);
   return { out: req.out };
 }

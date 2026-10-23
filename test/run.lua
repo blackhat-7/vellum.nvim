@@ -440,6 +440,46 @@ do
   check('placeholder cols', vim.api.nvim_strwidth(lines[2][1][1]) == 7)
 end
 
+-- a rendered PNG's density (pixels per CSS px) comes from the pHYs chunk the
+-- renderer writes right after IHDR, in pixels per metre at 96 CSS px per inch
+local function u32(n) return string.char(math.floor(n / 16777216) % 256, math.floor(n / 65536) % 256, math.floor(n / 256) % 256, n % 256) end
+local function phys(ppm, unit) return u32(9) .. 'pHYs' .. u32(ppm) .. u32(ppm) .. string.char(unit or 1) .. u32(0) end
+local function write_png(path, w, h, chunk) -- CRCs are zero: only the headers are read
+  local f = io.open(path, 'wb')
+  f:write('\137PNG\r\n\26\n' .. u32(13) .. 'IHDR' .. u32(w) .. u32(h) .. string.rep('\0', 5) .. u32(0) .. (chunk or '') .. u32(0) .. 'IEND' .. u32(0))
+  f:close()
+  return path
+end
+do
+  local function density(chunk) return image.png_density(write_png(vim.fn.tempname(), 10, 10, chunk)) end
+  check('2x density from pHYs', density(phys(7559)) == 2, density(phys(7559)))
+  check('capped density from pHYs', density(phys(4762)) == 1.26, density(phys(4762)))
+  check('no pHYs, no density', density(nil) == nil)
+  check('pHYs without a unit is no density', density(phys(7559, 0)) == nil)
+end
+
+-- a capped diagram is cached apart from the 2x one and keeps its size in the
+-- preview: half the pixels at density 1 draw as wide as the 2x PNG
+do
+  local browser = require('vellum.browser')
+  local theme = require('vellum.theme')
+  local cache = vim.fn.stdpath('cache') .. '/vellum'
+  local code = 'graph TD\n  capped --> diagram'
+  local function cached(key, w, h, chunk) write_png(cache .. '/' .. vim.fn.sha256(key):sub(1, 32) .. '.png', w, h, chunk) end
+  cached(theme.signature .. code, 2400, 800) -- no pHYs: rendered before the renderer wrote one
+  browser.max_pixels = 1e6
+  cached(theme.signature .. code .. '\0max' .. browser.max_pixels, 1200, 400, phys(3780))
+  local _, capped_file, capped = browser.diagram(code, theme)
+  browser.max_pixels = nil
+  local _, full_file, full = browser.diagram(code, theme)
+  check('uncapped diagram is the 2x PNG', full and full[1] == 2400 and full[3] == 2, vim.inspect(full))
+  check('capped diagram is its own PNG', capped and capped[1] == 1200 and capped[3] == 1, vim.inspect(capped))
+  local function cols(lines) return select(2, lines[1][2][1]:gsub(vim.fn.nr2char(0x10EEEE), '')) end
+  local media = require('vellum.media')
+  local wide, narrow = media.picture(full_file, full[1], full[2], 300, full[3]), media.picture(capped_file, capped[1], capped[2], 300, capped[3])
+  check('capped diagram keeps its width', cols(wide) == cols(narrow), cols(wide) .. ' vs ' .. cols(narrow))
+end
+
 -- Obsidian: callouts, ==highlight==, [[wikilinks]]
 do
   local lines = doc('> [!question]- Why *here*?\n> body line')

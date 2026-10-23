@@ -133,7 +133,10 @@ local function resized()
 end
 M.redraw = draw
 
-function M.setup(opts) M.config = vim.tbl_extend('force', M.config, opts or {}) end
+function M.setup(opts)
+  M.config = vim.tbl_extend('force', M.config, opts or {})
+  browser.max_pixels = M.config.max_pixels
+end
 
 function M.open()
   if valid() then return end

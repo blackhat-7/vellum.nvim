@@ -45,7 +45,7 @@ local function load(src)
     version = stat.mtime.sec .. '.' .. stat.size
   end
   local state, file, size = browser.image(src, version)
-  if state == 'ready' then return file, size[1], size[2], 2 end
+  if state == 'ready' then return file, size[1], size[2], size[3] end
   if state == 'pending' then M.pending = M.pending + 1 end
 end
 

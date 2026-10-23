@@ -309,7 +309,7 @@ function M.picture(tex, width, key)
   if not image.supported or image.problem() then return nil end
   local state, a, b = browser.math(tex, theme.math)
   if state == 'ready' then
-    local lines = media.picture(a, b[1], b[2], width, 2)
+    local lines = media.picture(a, b[1], b[2], width, b[3])
     if key then last[key] = lines end
     return lines
   elseif state == 'error' then

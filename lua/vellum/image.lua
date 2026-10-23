@@ -120,6 +120,12 @@ function M.cell()
   return 8, 16
 end
 
+-- The big-endian 32-bit number at byte `i` of `s`.
+local function u32(s, i)
+  local a, b, c, d = s:byte(i, i + 3)
+  return ((a * 256 + b) * 256 + c) * 256 + d
+end
+
 -- Width and height of a PNG file, or nil when it is missing.
 function M.png_size(path)
   local f = io.open(path, 'rb')
@@ -127,11 +133,20 @@ function M.png_size(path)
   local h = f:read(24)
   f:close()
   if not h or #h < 24 or h:sub(2, 4) ~= 'PNG' then return nil end
-  local function u32(i)
-    local a, b, c, d = h:byte(i, i + 3)
-    return ((a * 256 + b) * 256 + c) * 256 + d
-  end
-  return u32(17), u32(21)
+  return u32(h, 17), u32(h, 21)
+end
+
+-- Image pixels per CSS px, from a pHYs chunk right after the IHDR, where the
+-- renderer writes it; nil when the PNG has none there.
+function M.png_density(path)
+  local f = io.open(path, 'rb')
+  if not f then return nil end
+  local h = f:read(50)
+  f:close()
+  if not h or #h < 50 or h:sub(38, 41) ~= 'pHYs' or h:byte(50) ~= 1 then return nil end
+  -- pixels per metre at CSS's 96 px per inch, rounded so a 2x PNG reads as 2
+  local density = u32(h, 42) * 0.0254 / 96
+  return math.floor(density * 1000 + 0.5) / 1000
 end
 
 M.paths = {} -- image id -> PNG path, to find the file behind a placeholder

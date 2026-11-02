@@ -92,6 +92,14 @@ local function scrolled()
   end
 end
 
+-- tab mode puts the focus, and its window pins the buffer, where Tab keys the user
+-- associates with moving around must move tab pages; their own bindings return on close
+local function tabkeys(buf)
+  vim.keymap.set('n', '<Tab>', '<Cmd>tabnext<cr>', { buffer = buf, desc = 'Next tab page' })
+  vim.keymap.set('n', 'gt', '<Cmd>tabnext<cr>', { buffer = buf, desc = 'Next tab page' })
+  vim.keymap.set('n', '<S-Tab>', '<Cmd>tabprevious<cr>', { buffer = buf, desc = 'Previous tab page' })
+end
+
 local function draw()
   if not valid() then return end
   local lines
@@ -157,9 +165,8 @@ function M.open()
     if not M.follow() then vim.notify('vellum: no link under the cursor', vim.log.levels.INFO) end
   end, { buffer = S.buf, desc = 'Follow the link' })
   if M.config.tab then
-    -- cycling buffers errors in the preview window (winfixbuf pins it), so Tab/S-Tab move tab pages
-    vim.keymap.set('n', '<Tab>', '<Cmd>tabnext<cr>', { buffer = S.buf, desc = 'Next tab page' })
-    vim.keymap.set('n', '<S-Tab>', '<Cmd>tabprevious<cr>', { buffer = S.buf, desc = 'Previous tab page' })
+    tabkeys(S.buf)
+    tabkeys(S.src)
   end
   theme.apply()
   if image.supported and not image.problem() then browser.start() end
@@ -177,8 +184,25 @@ function M.open()
   au('WinScrolled', scrolled)
   au('WinResized', resized)
   au('BufEnter', function(ev)
-    if ev.buf ~= S.src and vim.bo[ev.buf].filetype == 'markdown' then
+    if ev.buf == S.buf then
+      -- tabbing away overwrote the screen, and kitty placements do not re-anchor to text
+      -- reprinted on the way back: re-place what is on screen once this window has redrawn
+      settle:start(100, 0, vim.schedule_wrap(function()
+        if not valid() then return end
+        local again = {}
+        for _, row in pairs(S.rows) do
+          for _, m in ipairs(row) do
+            local id = m[3] and tonumber((m[3]:match('Img(%d+)')))
+            if id and image.paths[id] and not again[id] then
+              again[id] = true
+              image.resend(id)
+            end
+          end
+        end
+      end))
+    elseif ev.buf ~= S.src and vim.bo[ev.buf].filetype == 'markdown' then
       S.src = ev.buf
+      if M.config.tab then tabkeys(ev.buf) end
       update()
     end
   end)
@@ -222,6 +246,13 @@ end
 function M.close()
   api.nvim_clear_autocmds({ group = group })
   settle:stop()
+  for _, buf in ipairs({ S.buf, S.src }) do
+    if buf and api.nvim_buf_is_valid(buf) then
+      for _, key in ipairs({ '<Tab>', 'gt', '<S-Tab>' }) do
+        pcall(vim.keymap.del, 'n', key, { buffer = buf })
+      end
+    end
+  end
   if S.win and api.nvim_win_is_valid(S.win) then pcall(api.nvim_win_close, S.win, true) end
   S = {}
 end

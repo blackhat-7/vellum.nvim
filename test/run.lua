@@ -573,9 +573,13 @@ do
   local top = vim.api.nvim_win_call(pwin, vim.fn.winsaveview).topline
   check('the preview follows the source cursor across tab pages', top > 10, tostring(top))
   vim.api.nvim_set_current_win(pwin)
-  local tab_maps = { vim.fn.maparg('<Tab>', 'n', false, true).rhs, vim.fn.maparg('<S-Tab>', 'n', false, true).rhs }
-  check('Tab and S-Tab in the preview tab move tab pages',
-    tab_maps[1]:lower() == '<cmd>tabnext<cr>' and tab_maps[2]:lower() == '<cmd>tabprevious<cr>',
+  local tab_maps = { vim.fn.maparg('<Tab>', 'n', false, true).rhs, vim.fn.maparg('gt', 'n', false, true).rhs,
+    vim.fn.maparg('<S-Tab>', 'n', false, true).rhs }
+  vim.api.nvim_set_current_win(src)
+  tab_maps[#tab_maps + 1] = vim.fn.maparg('<Tab>', 'n', false, true).rhs
+  check('Tab, gt and S-Tab move tab pages in the plugin windows',
+    tab_maps[1]:lower() == '<cmd>tabnext<cr>' and tab_maps[2]:lower() == tab_maps[1]:lower()
+    and tab_maps[3]:lower() == '<cmd>tabprevious<cr>' and tab_maps[4]:lower() == tab_maps[1]:lower(),
     vim.inspect(tab_maps)) -- typed keys never run in this headless harness; the mapping is the plugin's contract
   vim.cmd(pb .. 'bwipeout!') -- a forced wipeout is the one way past winfixbuf: the preview goes with its buffer
   vim.wait(50)
@@ -583,6 +587,8 @@ do
     and #vim.api.nvim_list_tabpages() == tabs, vim.inspect(vim.api.nvim_list_tabpages()))
   vellum.close()
   check('close takes the preview tab with it', #vim.api.nvim_list_tabpages() == tabs and vim.fn.bufnr('vellum://preview') == -1)
+  check('close returns the Tab keys to the source buffer', vim.fn.maparg('<Tab>', 'n') == '',
+    vim.inspect(vim.fn.maparg('<Tab>', 'n', false, true)))
   -- a tab page with no source window left has nothing to preview
   vim.api.nvim_buf_set_lines(vim.api.nvim_win_get_buf(src), 0, -1, false, { '# Tabbed' })
   vellum.open()

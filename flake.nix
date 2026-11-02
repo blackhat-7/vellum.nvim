@@ -6,26 +6,29 @@
   outputs =
     { self, nixpkgs }:
     let
+      # no x86_64-darwin: nixpkgs no longer evaluates it
       systems = [
         "x86_64-linux"
         "aarch64-linux"
-        "x86_64-darwin"
         "aarch64-darwin"
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system} system);
 
-      # The headless shell puppeteer downloads for the version pinned in
-      # render/package-lock.json. `nix store prefetch-file` the same URL to fill
-      # in a new hash when puppeteer is bumped; systems not listed here get no
-      # browser and puppeteer downloads one on first use.
-      chrome = {
-        aarch64-darwin = {
-          version = "153.0.8010.36";
-          archive = "mac-arm64/chrome-headless-shell-mac-arm64";
-          cacheKey = "mac_arm-153.0.8010.36";
-          hash = "sha256-OxMzeP5EpfnISd+QSXY1d/vtKW7k0C0f+zG5/Kv3mFA=";
-        };
-      };
+      # The browser is puppeteer's to manage: it downloads the headless shell it
+      # expects into ~/.cache/puppeteer the first time a diagram is rendered.
+      # That keeps this flake platform-agnostic. Set an entry here to pin it
+      # instead, which makes the build hermetic and offline-capable — the archive
+      # is the one puppeteer would fetch, and `nix store prefetch-file` on that
+      # URL gives the hash. Re-do it whenever render/package-lock.json bumps
+      # puppeteer, since the expected version changes with it.
+      #
+      # aarch64-darwin = {
+      #   version = "153.0.8010.36";
+      #   archive = "mac-arm64/chrome-headless-shell-mac-arm64";
+      #   cacheKey = "mac_arm-153.0.8010.36";
+      #   hash = "sha256-OxMzeP5EpfnISd+QSXY1d/vtKW7k0C0f+zG5/Kv3mFA=";
+      # };
+      chrome = { };
 
       mk =
         pkgs: system:

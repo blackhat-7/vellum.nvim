@@ -1,48 +1,21 @@
 {
   lib,
   stdenvNoCC,
-  fetchurl,
-  unzip,
   vimUtils,
   nodejs,
   importNpmLock,
   src,
-  chrome ? null,
 }:
 let
   # The renderer is a node program under render/. Upstream installs it with
   # lazy.nvim's build step, which cannot run inside a store path, so the
-  # dependencies are built from the lockfile and linked in instead.
+  # dependencies are built from the lockfile and linked in instead. The browser
+  # it drives is puppeteer's own business — it fetches what it needs on first
+  # use, which keeps this package platform-agnostic.
   renderDeps = importNpmLock.buildNodeModules {
     npmRoot = "${src}/render";
     inherit nodejs;
   };
-
-  # Puppeteer looks for a browser it installed itself, under
-  # $PUPPETEER_CACHE_DIR/chrome-headless-shell/<platform>-<version>/. The same
-  # archive, unpacked into the same place, saves it the download.
-  chromeHeadlessShell =
-    if chrome == null then
-      null
-    else
-      stdenvNoCC.mkDerivation {
-        pname = "chrome-headless-shell";
-        inherit (chrome) version;
-
-        src = fetchurl {
-          url = "https://storage.googleapis.com/chrome-for-testing-public/${chrome.version}/${chrome.archive}.zip";
-          inherit (chrome) hash;
-        };
-
-        nativeBuildInputs = [ unzip ];
-        dontConfigure = true;
-        dontBuild = true;
-
-        installPhase = ''
-          mkdir -p $out/chrome-headless-shell/${chrome.cacheKey}
-          unzip -q $src -d $out/chrome-headless-shell/${chrome.cacheKey}
-        '';
-      };
 
   plugin = vimUtils.buildVimPlugin {
     name = "vellum.nvim";
@@ -58,5 +31,5 @@ let
   };
 in
 {
-  inherit plugin chromeHeadlessShell;
+  inherit plugin;
 }

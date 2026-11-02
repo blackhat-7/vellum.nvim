@@ -139,7 +139,8 @@ function M.open()
     vim.cmd('tabnew')
     S.win = api.nvim_get_current_win()
     api.nvim_win_set_buf(S.win, S.buf)
-    api.nvim_set_current_win(from) -- :Vellum leaves you editing the source
+    -- `tab = true` asks to see the preview, so :Vellum jumps to its tab; gT brings the source back
+    api.nvim_set_current_win(S.win)
   else
     S.win = api.nvim_open_win(S.buf, false, { split = 'right', win = from })
   end
@@ -203,7 +204,9 @@ function M.open()
     local wins = vim.tbl_filter(function(w) return api.nvim_win_get_config(w).relative == '' end, api.nvim_tabpage_list_wins(0))
     if #wins == 2 and vim.tbl_contains(wins, S.win) and api.nvim_get_current_win() ~= S.win then M.close() end
   end)
-  draw()
+  -- sync reads the current window as the source; the first draw must follow the
+  -- source cursor even when the focus is already the preview window
+  api.nvim_win_call(from, draw)
 end
 
 function M.close()

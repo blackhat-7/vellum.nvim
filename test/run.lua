@@ -533,8 +533,8 @@ do
   vim.o.hidden = true
 end
 
--- the preview in its own tab: the source keeps its own tab and the focus,
--- the tab holds nothing else, and it closes with the preview
+-- the preview in its own tab: the source keeps its own tab, the preview tab
+-- takes the focus, the tab holds nothing else, and it closes with the preview
 do
   local vellum = require('vellum')
   vellum.setup({ tab = true })
@@ -550,6 +550,7 @@ do
   end
   vim.api.nvim_buf_set_lines(vim.api.nvim_get_current_buf(), 0, -1, false, src_lines)
   local src, tab = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_tabpage()
+  vim.api.nvim_win_set_cursor(src, { #src_lines - 5, 0 })
   local tabs = #vim.api.nvim_list_tabpages()
   vellum.open()
   local pages = vim.api.nvim_list_tabpages()
@@ -558,11 +559,15 @@ do
   local pb = vim.api.nvim_win_get_buf(pwin)
   check('opens its own tab', #pages == tabs + 1 and #vim.api.nvim_tabpage_list_wins(last) == 1
     and pb == vim.fn.bufnr('vellum://preview'), vim.inspect(pages))
-  check('the source keeps its tab and the focus', vim.api.nvim_get_current_win() == src
-    and vim.api.nvim_get_current_tabpage() == tab and #vim.api.nvim_tabpage_list_wins(tab) == 1)
+  check('the preview tab takes the focus', vim.api.nvim_get_current_win() == pwin
+    and vim.api.nvim_get_current_tabpage() == last and #vim.api.nvim_tabpage_list_wins(tab) == 1)
   check('the preview fills the tab, not a split', vim.api.nvim_win_get_width(pwin) == vim.o.columns,
     ('%d of %d columns'):format(vim.api.nvim_win_get_width(pwin), vim.o.columns))
   check('draws there', find(vim.api.nvim_buf_get_lines(pb, 0, -1, false), 'Tabbed'))
+  -- the first draw runs with the source as the window it syncs, though the focus is this tab
+  check('open starts the preview where the source cursor is',
+    vim.api.nvim_win_call(pwin, vim.fn.winsaveview).topline > 1)
+  vim.api.nvim_set_current_win(src)
   vim.api.nvim_win_set_cursor(src, { #src_lines - 5, 0 })
   vellum.redraw() -- draw ends with sync: the preview must follow a cursor deep in the source
   local top = vim.api.nvim_win_call(pwin, vim.fn.winsaveview).topline

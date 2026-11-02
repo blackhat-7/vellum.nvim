@@ -78,7 +78,7 @@ Options (the defaults):
 ```lua
 require('vellum').setup({
   max_width = 100, -- widest text column in the preview
-  tab = false,     -- true: the preview opens in its own tab, not beside the buffer
+  tab = false,     -- true: the preview opens in its own tab, and :Vellum switches to it
 })
 ```
 

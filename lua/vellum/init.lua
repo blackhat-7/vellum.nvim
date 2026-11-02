@@ -10,7 +10,7 @@ local links = require('vellum.links')
 local api = vim.api
 local M = {}
 
-M.config = { max_width = 100 }
+M.config = { max_width = 100, tab = false }
 
 local ns = api.nvim_create_namespace('vellum')
 local group = api.nvim_create_augroup('vellum', { clear = true })
@@ -131,7 +131,18 @@ function M.open()
   S = { src = api.nvim_get_current_buf(), buf = api.nvim_create_buf(false, true), anchors = {}, rows = {}, margin = 0 }
   vim.bo[S.buf].bufhidden = 'wipe'
   api.nvim_buf_set_name(S.buf, 'vellum://preview')
-  S.win = api.nvim_open_win(S.buf, false, { split = 'right', win = api.nvim_get_current_win() })
+  -- `tab = true`: the preview takes a tab of its own, not a place beside the
+  -- source. tabnew leaves one empty window, and the preview buffer goes into
+  -- it, so the tab holds nothing else and closing the preview closes the tab.
+  local from = api.nvim_get_current_win()
+  if M.config.tab then
+    vim.cmd('tabnew')
+    S.win = api.nvim_get_current_win()
+    api.nvim_win_set_buf(S.win, S.buf)
+    api.nvim_set_current_win(from) -- :Vellum leaves you editing the source
+  else
+    S.win = api.nvim_open_win(S.buf, false, { split = 'right', win = from })
+  end
   local wo = vim.wo[S.win][0]
   wo.number, wo.relativenumber, wo.signcolumn, wo.foldcolumn, wo.statuscolumn = false, false, 'no', '0', ''
   wo.wrap, wo.list, wo.spell, wo.cursorline, wo.colorcolumn = false, false, false, false, ''

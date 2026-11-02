@@ -14,26 +14,26 @@
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system} system);
 
-      # puppeteer's installer downloads and unpacks the browser itself, so it can
-      # only run inside a fixed-output derivation. Each platform gets a different
-      # shell, hence a hash per system. When puppeteer in render/package-lock.json
-      # is bumped, the expected browser version changes too: set the hash below to
-      # lib.fakeHash, build, and paste the value nix reports as "got:".
-      chromeHashes = {
-        aarch64-darwin = "sha256-n/g5+68/lT6k0xhnWEz2qT70Cp1yAuvrO22gYrmHtTs=";
+      # The headless shell puppeteer downloads for the version pinned in
+      # render/package-lock.json. `nix store prefetch-file` the same URL to fill
+      # in a new hash when puppeteer is bumped; systems not listed here get no
+      # browser and puppeteer downloads one on first use.
+      chrome = {
+        aarch64-darwin = {
+          version = "153.0.8010.36";
+          archive = "mac-arm64/chrome-headless-shell-mac-arm64";
+          cacheKey = "mac_arm-153.0.8010.36";
+          hash = "sha256-OxMzeP5EpfnISd+QSXY1d/vtKW7k0C0f+zG5/Kv3mFA=";
+        };
       };
 
       mk =
         pkgs: system:
-        let
-          chromeHash = chromeHashes.${system} or null;
-          p = import ./nix/package.nix {
-            inherit (pkgs) lib stdenvNoCC vimUtils nodejs importNpmLock cacert unzip;
-            src = self;
-            inherit chromeHash;
-          };
-        in
-        p;
+        import ./nix/package.nix {
+          inherit (pkgs) lib stdenvNoCC fetchurl unzip vimUtils nodejs importNpmLock;
+          src = self;
+          chrome = chrome.${system} or null;
+        };
     in
     {
       packages = forAllSystems (
@@ -45,11 +45,12 @@
           default = p.plugin;
           inherit (p) plugin;
         }
-        // nixpkgs.lib.optionalAttrs (p.chrome != null) { chrome-headless-shell = p.chrome; }
+        // nixpkgs.lib.optionalAttrs (p.chromeHeadlessShell != null) {
+          inherit (p) chromeHeadlessShell;
+        }
       );
 
-      # for nixvim: adds the plugin, node, and points puppeteer at the packaged
-      # browser. Use with `imports = [ inputs.vellum.nixvimModules.default ]`.
+      # for nixvim: `imports = [ inputs.vellum.nixvimModules.default ]`
       nixvimModules.default =
         {
           pkgs,
@@ -74,8 +75,8 @@
             }
           ];
         }
-        // lib.optionalAttrs (p.chrome != null) {
-          extraConfigLua = ''vim.env.PUPPETEER_CACHE_DIR = "${p.chrome}"'';
+        // lib.optionalAttrs (p.chromeHeadlessShell != null) {
+          extraConfigLua = ''vim.env.PUPPETEER_CACHE_DIR = "${p.chromeHeadlessShell}"'';
         };
     };
 }

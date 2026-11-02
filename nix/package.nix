@@ -1,46 +1,46 @@
 {
   lib,
   stdenvNoCC,
+  fetchurl,
+  unzip,
   vimUtils,
   nodejs,
   importNpmLock,
-  cacert,
-  unzip,
   src,
-  chromeHash ? null,
+  chrome ? null,
 }:
 let
-  # The diagram renderer is a node program under render/. Upstream installs it
-  # with lazy.nvim's build step (`npm ci` + `puppeteer browsers install`), which
-  # cannot run inside a store path, so both are done here instead: the npm
-  # dependencies come from the lockfile, and the browser is a fixed-output
-  # derivation the editor is pointed at through PUPPETEER_CACHE_DIR.
+  # The renderer is a node program under render/. Upstream installs it with
+  # lazy.nvim's build step, which cannot run inside a store path, so the
+  # dependencies are built from the lockfile and linked in instead.
   renderDeps = importNpmLock.buildNodeModules {
     npmRoot = "${src}/render";
     inherit nodejs;
   };
 
-  chrome =
-    if chromeHash == null then
+  # Puppeteer looks for a browser it installed itself, under
+  # $PUPPETEER_CACHE_DIR/chrome-headless-shell/<platform>-<version>/. The same
+  # archive, unpacked into the same place, saves it the download.
+  chromeHeadlessShell =
+    if chrome == null then
       null
     else
       stdenvNoCC.mkDerivation {
         pname = "chrome-headless-shell";
-        version = "puppeteer-managed";
-        nativeBuildInputs = [
-          nodejs
-          cacert
-          unzip
-        ];
-        outputHashMode = "recursive";
-        outputHashAlgo = "sha256";
-        outputHash = chromeHash;
-        buildCommand = ''
-          export HOME=$TMPDIR
-          export PUPPETEER_CACHE_DIR=$out
-          mkdir -p $out
-          cd ${renderDeps}
-          ./node_modules/.bin/puppeteer browsers install chrome-headless-shell
+        inherit (chrome) version;
+
+        src = fetchurl {
+          url = "https://storage.googleapis.com/chrome-for-testing-public/${chrome.version}/${chrome.archive}.zip";
+          inherit (chrome) hash;
+        };
+
+        nativeBuildInputs = [ unzip ];
+        dontConfigure = true;
+        dontBuild = true;
+
+        installPhase = ''
+          mkdir -p $out/chrome-headless-shell/${chrome.cacheKey}
+          unzip -q $src -d $out/chrome-headless-shell/${chrome.cacheKey}
         '';
       };
 
@@ -58,5 +58,5 @@ let
   };
 in
 {
-  inherit plugin chrome;
+  inherit plugin chromeHeadlessShell;
 }

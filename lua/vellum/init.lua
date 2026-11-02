@@ -156,6 +156,11 @@ function M.open()
   vim.keymap.set('n', 'gx', function()
     if not M.follow() then vim.notify('vellum: no link under the cursor', vim.log.levels.INFO) end
   end, { buffer = S.buf, desc = 'Follow the link' })
+  if M.config.tab then
+    -- cycling buffers errors in the preview window (winfixbuf pins it), so Tab/S-Tab move tab pages
+    vim.keymap.set('n', '<Tab>', '<Cmd>tabnext<cr>', { buffer = S.buf, desc = 'Next tab page' })
+    vim.keymap.set('n', '<S-Tab>', '<Cmd>tabprevious<cr>', { buffer = S.buf, desc = 'Previous tab page' })
+  end
   theme.apply()
   if image.supported and not image.problem() then browser.start() end
   -- The preview falls back to text on its own; say why, once a session.
@@ -189,6 +194,11 @@ function M.open()
     update()
   end)
   au('WinClosed', function() vim.schedule(M.close) end, { pattern = tostring(S.win) })
+  -- a forced `:bwipeout!` takes the preview buffer even while winfixbuf pins its window;
+  -- the preview must close with it, not draw onto a wiped buffer id on every edit
+  au({ 'BufUnload', 'BufWipeout' }, function(ev)
+    if ev.buf == S.buf then vim.schedule(M.close) end
+  end)
   -- A preview whose source no window shows has nothing to follow, and an
   -- unloaded source renders empty. Checked after the event, because BufEnter
   -- may have moved the preview to the markdown buffer that replaced it.

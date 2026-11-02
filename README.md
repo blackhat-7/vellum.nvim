@@ -58,7 +58,7 @@ In the preview:
 
 - `gx` or `<CR>` on a link follows it. Web links open in your browser, `#heading` links jump to the heading, and links to other markdown files open them in the source window (the preview follows). Other files open in their default app.
 - `<CR>` on a diagram or image opens it full-screen.
-- `q` closes the preview.
+- `q` closes the preview. With `tab = true`, `Tab`/`S-Tab` here move between the source and preview tabs.
 
 Full-screen:
 

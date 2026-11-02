@@ -572,6 +572,15 @@ do
   vellum.redraw() -- draw ends with sync: the preview must follow a cursor deep in the source
   local top = vim.api.nvim_win_call(pwin, vim.fn.winsaveview).topline
   check('the preview follows the source cursor across tab pages', top > 10, tostring(top))
+  vim.api.nvim_set_current_win(pwin)
+  local tab_maps = { vim.fn.maparg('<Tab>', 'n', false, true).rhs, vim.fn.maparg('<S-Tab>', 'n', false, true).rhs }
+  check('Tab and S-Tab in the preview tab move tab pages',
+    tab_maps[1]:lower() == '<cmd>tabnext<cr>' and tab_maps[2]:lower() == '<cmd>tabprevious<cr>',
+    vim.inspect(tab_maps)) -- typed keys never run in this headless harness; the mapping is the plugin's contract
+  vim.cmd(pb .. 'bwipeout!') -- a forced wipeout is the one way past winfixbuf: the preview goes with its buffer
+  vim.wait(50)
+  check('preview closes when its buffer is wiped out', vim.fn.bufnr('vellum://preview') == -1
+    and #vim.api.nvim_list_tabpages() == tabs, vim.inspect(vim.api.nvim_list_tabpages()))
   vellum.close()
   check('close takes the preview tab with it', #vim.api.nvim_list_tabpages() == tabs and vim.fn.bufnr('vellum://preview') == -1)
   -- a tab page with no source window left has nothing to preview

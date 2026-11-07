@@ -139,6 +139,10 @@ scale instead. They keep their size in the preview but look softer when zoomed.
 | Front matter, HTML blocks | shown as YAML / text; comments hidden |
 | MDX (`.mdx`) | as markdown; JSX tags like HTML, `import`/`export` lines and `{/* comments */}` hidden |
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 MIT

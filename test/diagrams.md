@@ -86,6 +86,7 @@ gitGraph
   merge feature
 ```
 
+<!-- broken on purpose: shows mermaid's error -->
 ```mermaid
 flowchart LR
   A --> 

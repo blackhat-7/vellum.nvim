@@ -180,8 +180,27 @@ function M.grid(id, path, cols, rows, r0, c0, nr, nc)
   return out
 end
 
+local owned = {} -- ids the preview placed (the zoom viewer keeps its own)
+
 -- Placeholder lines showing `path` in a cols x rows box, as segment lines.
-function M.lines(path, cols, rows) return M.grid(M.id(path), path, cols, rows, 0, 0, rows, cols) end
+function M.lines(path, cols, rows)
+  local id = M.id(path)
+  owned[id] = true
+  return M.grid(id, path, cols, rows, 0, 0, rows, cols)
+end
+
+-- Free the preview's images that `shown` (id → true) no longer has. Every
+-- version of an edited diagram is a new image; kept, they fill the
+-- terminal's image memory (kitty: 320 MB) and it evicts images still on
+-- screen.
+function M.keep(shown)
+  for id in pairs(owned) do
+    if not shown[id] then
+      M.drop(id)
+      owned[id] = nil
+    end
+  end
+end
 
 -- Send image `id`'s current placement again. Under a burst of redraws tmux
 -- can drop one, leaving the picture at an old size over the new text.

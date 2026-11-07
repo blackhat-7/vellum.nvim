@@ -432,6 +432,24 @@ do
   check('badges sit in the text line', row and row:find('ok$') and select(2, row:gsub(ph, '')) == 2 * cells, row)
   local i = find(badges, '^%s*see$')
   check('big image in text gets its own lines', i and badges[i + 1]:find(ph) and find(badges, '^%s*below$'), vim.inspect(badges))
+  -- the preview frees images it no longer shows (old versions of an edited
+  -- diagram filled kitty's image memory), never the zoom viewer's
+  local drop, dropped = image.drop, {}
+  image.drop = function(id) dropped[id] = true end
+  image.supported = true
+  local function shown_by(text)
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(text, '\n'))
+    return select(5, render.render(buf, 84, 100))
+  end
+  local wide, small_id = image.id(dir .. '/wide.png'), image.id(dir .. '/small.png')
+  local both = shown_by('![w](' .. dir .. '/wide.png)\n\n![s](' .. dir .. '/small.png)')
+  check('render reports the images it shows', both[wide] and both[small_id], vim.inspect(both))
+  local zoom_id = image.id(dir .. '/wide.png#zoom')
+  image.grid(zoom_id, dir .. '/wide.png', 4, 2, 0, 0, 2, 4)
+  image.keep(shown_by('![s](' .. dir .. '/small.png)'))
+  check('an image no longer shown is freed; shown and zoom ones stay', dropped[wide] and not dropped[small_id] and not dropped[zoom_id], vim.inspect(dropped))
+  image.drop, image.supported = drop, false
 end
 
 -- images need 'termguicolors', read when used: Neovim may set it after startup

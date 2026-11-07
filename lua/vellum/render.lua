@@ -470,26 +470,32 @@ function M.render(buf, win_width, max_width)
   end
   local body, anchors = blocks(content(root), width, 0)
   cache, used = used, {}
-  local text, rows = { '' }, { {} } -- a blank first line for breathing room
+  local text, rows, shown = { '' }, { {} }, {} -- a blank first line for breathing room; shown: image ids
   for i, line in ipairs(body) do
     -- flattened once per line object; cached blocks reuse theirs
     if not line.flat then
-      local parts, marks, col = {}, {}, 0
+      local parts, marks, col, images = {}, {}, 0, nil
       for _, s in ipairs(line) do
         local len = #s[1]
         local group = s[2] and theme.merge(s[2])
         if group and len > 0 then marks[#marks + 1] = { col, col + len, group, 100, s.link } end
+        local id = group and image.id_of(group)
+        if id then
+          images = images or {}
+          images[#images + 1] = id
+        end
         for k, m in ipairs(s[3] or {}) do marks[#marks + 1] = { col + m[1], col + m[2], m[3], 100 + k } end
         parts[#parts + 1] = s[1]
         col = col + len
       end
-      line.flat = { table.concat(parts), marks }
+      line.flat = { table.concat(parts), marks, images }
     end
     text[i + 1] = margin .. line.flat[1]
     rows[i + 1] = line.flat[2]
+    for _, id in ipairs(line.flat[3] or {}) do shown[id] = true end
   end
   for _, a in ipairs(anchors) do a[3] = a[3] + 1 end
-  return text, rows, #margin, anchors
+  return text, rows, #margin, anchors, shown
 end
 
 return M

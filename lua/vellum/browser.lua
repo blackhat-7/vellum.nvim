@@ -10,6 +10,7 @@ local job, pending, errors, sizes, wanted = nil, {}, {}, {}, {} -- pending: out 
 local exports = {} -- out → function(error) to call when the export is done
 
 M.on_update = function() end
+M.waiting = 0 -- counts every answer 'pending': output showing one must not be cached
 M.max_pixels = nil -- most pixels in one rendered PNG, from setup(); nil for no cap
 
 -- Keep the cache under 100 MB, least recently used out first. Runs once per
@@ -114,10 +115,10 @@ local function request(key, payload)
   local out = dir .. '/' .. vim.fn.sha256(key):sub(1, 32) .. '.png'
   if errors[out] then return 'error', errors[out] end
   if not sizes[out] then
-    local w, h = image.png_size(out)
+    local w, h, density = image.png_size(out)
     if w then
       -- PNGs from before the renderer wrote pHYs are all 2x
-      sizes[out] = { w, h, image.png_density(out) or 2 }
+      sizes[out] = { w, h, density or 2 }
       vim.uv.fs_utime(out, os.time(), os.time())
     end
   end
@@ -127,6 +128,7 @@ local function request(key, payload)
     if err then return 'error', err end
   end
   wanted[out] = true
+  M.waiting = M.waiting + 1
   return 'pending'
 end
 

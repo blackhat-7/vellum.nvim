@@ -85,7 +85,6 @@ function M.diagram(code, width, row, lang)
   elseif state == 'error' then
     return M.panel(code, lang, width, nil, a)
   end
-  media.pending = media.pending + 1
   return last_diagram[row] or M.panel(code, lang, width, 'rendering…')
 end
 

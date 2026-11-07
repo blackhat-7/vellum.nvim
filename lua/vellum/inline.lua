@@ -10,11 +10,13 @@ local ts = vim.treesitter
 local strwidth = vim.api.nvim_strwidth
 local M = {}
 
-local function child(node, type)
+-- The first child of `node` of type `type`.
+function M.child(node, type)
   for c in node:iter_children() do
     if c:type() == type then return c end
   end
 end
+local child = M.child
 
 -- Display width of a line of segments.
 function M.width(segs)

@@ -126,27 +126,21 @@ local function u32(s, i)
   return ((a * 256 + b) * 256 + c) * 256 + d
 end
 
--- Width and height of a PNG file, or nil when it is missing.
+-- Width and height of a PNG file, or nil when it is missing; third, its image
+-- pixels per CSS px, from a pHYs chunk right after the IHDR where the renderer
+-- writes it, or nil when it has none there.
 function M.png_size(path)
-  local f = io.open(path, 'rb')
-  if not f then return nil end
-  local h = f:read(24)
-  f:close()
-  if not h or #h < 24 or h:sub(2, 4) ~= 'PNG' then return nil end
-  return u32(h, 17), u32(h, 21)
-end
-
--- Image pixels per CSS px, from a pHYs chunk right after the IHDR, where the
--- renderer writes it; nil when the PNG has none there.
-function M.png_density(path)
   local f = io.open(path, 'rb')
   if not f then return nil end
   local h = f:read(50)
   f:close()
-  if not h or #h < 50 or h:sub(38, 41) ~= 'pHYs' or h:byte(50) ~= 1 then return nil end
-  -- pixels per metre at CSS's 96 px per inch, rounded so a 2x PNG reads as 2
-  local density = u32(h, 42) * 0.0254 / 96
-  return math.floor(density * 1000 + 0.5) / 1000
+  if not h or #h < 24 or h:sub(2, 4) ~= 'PNG' then return nil end
+  local density
+  if #h == 50 and h:sub(38, 41) == 'pHYs' and h:byte(50) == 1 then
+    -- pixels per metre at CSS's 96 px per inch, rounded so a 2x PNG reads as 2
+    density = math.floor(u32(h, 42) * 0.0254 / 96 * 1000 + 0.5) / 1000
+  end
+  return u32(h, 17), u32(h, 21), density
 end
 
 M.paths = {} -- image id -> PNG path, to find the file behind a placeholder

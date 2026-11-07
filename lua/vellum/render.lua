@@ -4,6 +4,7 @@ local image = require('vellum.image')
 local theme = require('vellum.theme')
 local inline = require('vellum.inline')
 local media = require('vellum.media')
+local browser = require('vellum.browser')
 local code = require('vellum.code')
 local latex = require('vellum.latex')
 local mdx = require('vellum.mdx')
@@ -51,11 +52,7 @@ local function text_of(node, from)
   return (table.concat(out, '\n'):gsub(ZWSP, ''))
 end
 
-local function child(node, type)
-  for c in node:iter_children() do
-    if c:type() == type then return c end
-  end
-end
+local child = inline.child
 
 -- Named children that carry content, skipping types matching `skip`.
 local function kids(node, skip)
@@ -132,13 +129,13 @@ function render_block(node, width)
     used[key] = hit
     return hit[1], hit[2]
   end
-  local v = media.pending
+  local v = browser.waiting
   local lines, anchors = fn(node, width)
   if not anchors then
     local sr, _, er, ec = node:range()
     anchors = { { 0, math.max(1, er - sr + (ec > 0 and 1 or 0)), 0, #lines } }
   end
-  if v == media.pending then used[key] = { lines, anchors } end
+  if v == browser.waiting then used[key] = { lines, anchors } end
   return lines, anchors
 end
 
@@ -174,16 +171,12 @@ local function heading(level, text, width)
   return out
 end
 
+-- An ATX heading holds its inline text; a setext one holds it in a paragraph.
 function R.atx_heading(node, width)
-  local inl = child(node, 'inline')
+  local inl = child(child(node, 'paragraph') or node, 'inline')
   return heading(heading_level(node), inl and text_of(inl, inl) or '', width)
 end
-
-function R.setext_heading(node, width)
-  local p = child(node, 'paragraph')
-  local inl = p and child(p, 'inline')
-  return heading(heading_level(node), inl and text_of(inl, inl) or '', width)
-end
+R.setext_heading = R.atx_heading
 
 -- "[^label]: text" lines, which tree-sitter sees as one plain paragraph.
 local function footnotes(text, width)

@@ -455,7 +455,7 @@ local function write_png(path, w, h, chunk) -- CRCs are zero: only the headers a
   return path
 end
 do
-  local function density(chunk) return image.png_density(write_png(vim.fn.tempname(), 10, 10, chunk)) end
+  local function density(chunk) return select(3, image.png_size(write_png(vim.fn.tempname(), 10, 10, chunk))) end
   check('2x density from pHYs', density(phys(7559)) == 2, density(phys(7559)))
   check('capped density from pHYs', density(phys(4762)) == 1.26, density(phys(4762)))
   check('no pHYs, no density', density(nil) == nil)

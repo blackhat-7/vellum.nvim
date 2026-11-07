@@ -46,17 +46,24 @@ local function view(win)
   return v.topline .. ':' .. v.lnum
 end
 
+-- `pos` mapped across the anchors { src_row, src_rows, out_line, out_lines }:
+-- fields i, i+1 are its side, j, j+1 the other. Within a block, proportional.
+local function across(pos, i, j)
+  local target = 0
+  for _, a in ipairs(S.anchors) do
+    if a[i] > pos then break end
+    target = pos < a[i] + a[i + 1] and a[j] + math.floor((pos - a[i]) / a[i + 1] * a[j + 1]) or a[j] + a[j + 1]
+  end
+  return target
+end
+
 -- Scroll the preview so the block under the cursor sits at the cursor's screen row.
 local function sync(force)
   local win = api.nvim_get_current_win()
   if not valid() or api.nvim_win_get_buf(win) ~= S.src then return end
   if force ~= true and view(win) == S.view then return end
   S.view = nil
-  local row, target = api.nvim_win_get_cursor(win)[1] - 1, 0
-  for _, a in ipairs(S.anchors) do
-    if a[1] > row then break end
-    target = row < a[1] + a[2] and a[3] + math.floor((row - a[1]) / a[2] * a[4]) or a[3] + a[4]
-  end
+  local target = across(api.nvim_win_get_cursor(win)[1] - 1, 1, 3)
   local screen = vim.fn.winline() - 1
   api.nvim_win_call(S.win, function()
     vim.fn.winrestview({ topline = math.max(1, target + 1 - screen), lnum = target + 1, col = 0 })
@@ -68,12 +75,7 @@ end
 local function follow()
   local win = vim.fn.bufwinid(S.src)
   if not valid() or win == -1 then return end
-  local top = api.nvim_win_call(S.win, vim.fn.winsaveview).topline - 1
-  local target = 0
-  for _, a in ipairs(S.anchors) do
-    if a[3] > top then break end
-    target = top < a[3] + a[4] and a[1] + math.floor((top - a[3]) / a[4] * a[2]) or a[1] + a[2]
-  end
+  local target = across(api.nvim_win_call(S.win, vim.fn.winsaveview).topline - 1, 3, 1)
   api.nvim_win_call(win, function()
     -- <C-e>/<C-y> drag the cursor along; setting topline alone would not
     local d = target + 1 - vim.fn.winsaveview().topline

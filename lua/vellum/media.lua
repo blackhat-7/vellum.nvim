@@ -6,7 +6,6 @@ local browser = require('vellum.browser')
 local M = {}
 
 M.dir = '.' -- directory of the markdown file, for relative paths
-M.pending = 0 -- bumped by output still being rendered, which must not be cached
 
 local ROW = 24 -- CSS px per text row: 16px text in an image lands near terminal text size
 
@@ -46,7 +45,6 @@ local function load(src)
   end
   local state, file, size = browser.image(src, version)
   if state == 'ready' then return file, size[1], size[2], size[3] end
-  if state == 'pending' then M.pending = M.pending + 1 end
 end
 
 -- Lines showing image `src` as a block, or nil.

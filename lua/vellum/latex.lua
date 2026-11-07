@@ -315,7 +315,6 @@ function M.picture(tex, width, key)
   elseif state == 'error' then
     return nil, a
   end
-  media.pending = media.pending + 1
   return key and last[key]
 end
 

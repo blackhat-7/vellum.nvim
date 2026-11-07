@@ -45,7 +45,6 @@ function M.apply()
 
   for i, c in ipairs(h) do set('H' .. i, { fg = c, bold = i < 6, italic = i >= 5 }) end
   set('H1Band', { fg = h[1], bg = blend(h[1], bg, 0.16), bold = true })
-  set('Text', { fg = fg })
   set('Muted', { fg = muted })
   set('Border', { fg = border })
   set('Bold', { bold = true })

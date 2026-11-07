@@ -5,16 +5,15 @@ local M = {}
 
 local function filetypes(buf) return vim.split(vim.bo[buf].filetype, '.', { plain = true }) end
 
--- Markdown or MDX by filetype. A dotted filetype ("markdown.mdx") is several.
-function M.markdown(buf)
-  local fts = filetypes(buf)
-  return vim.list_contains(fts, 'markdown') or vim.list_contains(fts, 'mdx')
-end
-
--- Neovim does not detect .mdx, so the name counts as well as the filetype.
+-- MDX by filetype or name: Neovim does not detect .mdx, so without a plugin
+-- that sets one the filetype is empty. A dotted filetype ("markdown.mdx") is
+-- several filetypes.
 function M.is(buf)
   return vim.api.nvim_buf_get_name(buf):lower():match('%.mdx$') ~= nil or vim.list_contains(filetypes(buf), 'mdx')
 end
+
+-- Markdown or MDX: what the preview follows and export takes.
+function M.markdown(buf) return vim.list_contains(filetypes(buf), 'markdown') or M.is(buf) end
 
 -- Whether `node`, a block of the document or of a heading's section, is an
 -- MDX statement or comment. MDX allows both only there, and markdown parses

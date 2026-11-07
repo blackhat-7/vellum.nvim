@@ -322,6 +322,14 @@ do
   vim.api.nvim_exec_autocmds('BufEnter', { buffer = 0 })
   vellum.redraw()
   check('follows an mdx buffer', shown('Four'))
+  -- Neovim gives .mdx no filetype; the name is enough
+  vim.cmd('enew')
+  vim.api.nvim_buf_set_name(0, vim.fn.tempname() .. '.mdx')
+  check('plain nvim gives .mdx no filetype', vim.bo.filetype == '', vim.bo.filetype)
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'Five' })
+  vim.api.nvim_exec_autocmds('BufEnter', { buffer = 0 })
+  vellum.redraw()
+  check('follows an .mdx file with no filetype', shown('Five'))
   vellum.close()
 end
 

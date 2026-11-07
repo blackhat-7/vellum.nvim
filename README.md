@@ -47,7 +47,7 @@ Colors follow your colorscheme, light or dark:
 }
 ```
 
-lazy installs the diagram renderer for you (`npm ci` and a small headless Chrome).
+lazy installs the renderer's node dependencies for you. It never downloads a browser: run `:Vellum build` once (and after updates) to install the small headless Chrome that diagrams need. With `diagrams = false` that command installs no browser.
 
 **Other plugin managers:** run `:Vellum build` once after installing, and again after updates.
 
@@ -57,7 +57,7 @@ lazy installs the diagram renderer for you (`npm ci` and a small headless Chrome
 imports = [ inputs.vellum.nixvimModules.default ];
 ```
 
-Then check your setup with `:checkhealth vellum`. It renders a test diagram and says what is missing.
+Then check your setup with `:checkhealth vellum`. It checks the renderer and says what is missing.
 
 ## Use
 
@@ -65,7 +65,7 @@ Then check your setup with `:checkhealth vellum`. It renders a test diagram and 
 |---|---|
 | `:Vellum` | Open or close the preview |
 | `:Vellum export` | Write a PDF beside the file (`:Vellum export notes.html` for HTML) |
-| `:Vellum build` | Install the renderer (not needed with lazy or Nix) |
+| `:Vellum build` | Install the renderer, and the browser when diagrams are on (Nix packages both) |
 
 In the preview:
 
@@ -93,6 +93,7 @@ require('vellum').setup({
   auto_open = false, -- true: open the preview whenever a markdown file is shown
   max_width = 100,   -- widest text column in the preview
   max_pixels = nil,  -- cap on pixels per rendered picture; nil for no cap
+  diagrams = true,   -- false: mermaid and D2 as code; :Vellum build skips the browser
 })
 ```
 
@@ -112,14 +113,16 @@ vim.api.nvim_create_autocmd('ColorScheme', {
 
 **Mermaid** renders with the same engine as GitHub, in a headless Chrome.
 
-**D2** works with no extra install. If the [`d2`](https://d2lang.com) command is installed, it is used instead: a newer D2, with your layout plugins (like TALA) and `D2_*` settings.
+**D2** needs no extra command: the renderer draws it. If the [`d2`](https://d2lang.com) command is installed, it is used instead: a newer D2, with your layout plugins (like TALA) and `D2_*` settings.
 
 - A diagram's own `vars: { d2-config: { ... } }` wins: `theme-id`, `theme-overrides`, `pad`, `sketch`, `layout-engine`.
 - Icons can be URLs or files; file paths are relative to the markdown file.
 - Markdown, LaTeX and code labels render.
 - Only the main board is drawn; `layers`, `scenarios` and `steps` are not.
 
-Each picture renders once and is cached on disk (up to 100 MB).
+Each picture renders once and is cached on disk (up to 100 MB). The browser starts with the first picture that needs rendering, not when the preview opens.
+
+With `diagrams = false`, mermaid and D2 fences stay as code in the preview and in exports, and `:Vellum build` installs no browser. Display math, non-PNG images and PDF/HTML export still use the renderer; set `diagrams = true` and run `:Vellum build` to install it.
 
 ## What renders
 

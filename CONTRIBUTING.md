@@ -5,7 +5,7 @@ Thanks for helping. This page has what you need: setup, checks, the code map and
 ## Setup
 
 - Neovim 0.12 or newer. Node 20 or newer, for the renderer only.
-- Build the renderer once: `:Vellum build`, or `(cd render && npm ci && npx puppeteer browsers install chrome-headless-shell)`.
+- Build the renderer once: `:Vellum build` (with diagrams on, the default), or `(cd render && npm ci && npx puppeteer browsers install chrome-headless-shell)`.
 - Try it: `nvim --clean -u test/init.lua test/sample.md -c Vellum`.
 
 ## Checks
@@ -62,5 +62,5 @@ nvim --clean -l test/render.lua   # real renderer: every test diagram, math, ima
 - The preview must never scroll sideways: image rows mark only their first cell.
 - Kitty placeholders need `termguicolors`: the image id is the text color.
 - tmux needs `set -g allow-passthrough on` and RGB in `terminal-features`.
-- Puppeteer only downloads a browser at install, never at launch. The renderer runs in `render/`, where it reads `.puppeteerrc.cjs`.
+- Puppeteer downloads a browser only when told to. `npm ci` skips both downloads (`.puppeteerrc.cjs`); `:Vellum build` installs the headless shell when diagrams are on. The renderer runs in `render/`, where that config is found.
 - `test/run.lua` sets a private cache before loading the plugin, because loading prunes the cache.

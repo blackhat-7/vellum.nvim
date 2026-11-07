@@ -50,16 +50,23 @@ function M.check()
     h.error('Neovim 0.12 or newer is needed')
   end
 
+  local diagrams = require('vellum.browser').diagrams
+  if not diagrams then
+    h.info('diagram support is off (diagrams = false): mermaid and D2 show as code')
+    h.info('display math, non-PNG images and export still use the renderer; set diagrams = true and run :Vellum build to install it')
+  end
+
   -- import.meta.resolve, which the renderer uses, is stable from Node 20.6
   local ok, r = pcall(function() return vim.system({ 'node', '--version' }, { text = true }):wait() end)
   local v = ok and r.code == 0 and vim.version.parse(r.stdout)
+  local need = diagrams and 'Diagrams, display math and non-PNG images' or 'Display math and non-PNG images'
   if not v then
-    h.error('node not found. Diagrams, display math and non-PNG images need Node.js 20.6 or newer')
+    h.error('node not found. ' .. need .. ' need Node.js 20.6 or newer')
   elseif vim.version.lt(v, { 20, 6, 0 }) then
-    h.error('node ' .. tostring(v) .. ' is too old. Diagrams, display math and non-PNG images need 20.6 or newer')
+    h.error('node ' .. tostring(v) .. ' is too old. ' .. need .. ' need 20.6 or newer')
   else
     h.ok('node ' .. tostring(v))
-    renderer()
+    if diagrams then renderer() end
   end
   images()
 end

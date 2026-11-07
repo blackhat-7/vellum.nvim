@@ -4,7 +4,7 @@
 //     resolve in dir; bin, the user's d2 command, renders it when given
 //   {"out": "/abs/file.png", "image": "/abs/path or https://..."}   any image the browser can show
 //   {"out": "/abs/file.png", "math": "\\frac{a}{b}", "color": "#rrggbb"}   display math, by KaTeX
-//   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir", "kinds": {...}, "d2bin": "/abs/d2"}   a document export
+//   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir", "kinds": {...}, "d2bin": "/abs/d2", "diagrams": false}   a document export; diagrams false leaves mermaid and D2 as code
 // Each picture request may carry "maxPixels", a cap on the PNG's pixels.
 // It answers one JSON line: {"out"} when the PNG is written, or {"out", "error"}.
 // A real browser renders exactly what GitHub renders; a fake DOM mis-measures
@@ -286,7 +286,7 @@ img, .mermaid svg, .diagram svg { max-width: 100%; }
 pre, table, img, .mermaid, .diagram, .katex-display { break-inside: avoid; }
 `;
 
-async function exportDoc({ markdown: text, dir, out, kinds, d2bin }) {
+async function exportDoc({ markdown: text, dir, out, kinds, d2bin, diagrams }) {
   markdown ??= await exporter().catch((e) => {
     throw new Error('export needs a rebuilt renderer (:Vellum build): ' + e.message);
   });
@@ -297,8 +297,8 @@ async function exportDoc({ markdown: text, dir, out, kinds, d2bin }) {
   const doc = await browser.newPage();
   try {
     await doc.goto(pathToFileURL(tmp).href, { waitUntil: 'load' });
-    await doc.addScriptTag({ path: MERMAID });
-    await doc.evaluate(async (kinds) => {
+    if (diagrams !== false) await doc.addScriptTag({ path: MERMAID });
+    await doc.evaluate(async (kinds, diagrams) => {
       // callout types and colors come from the preview (render.lua ALERTS)
       for (const q of document.querySelectorAll('blockquote')) {
         const p = q.firstElementChild;
@@ -319,24 +319,27 @@ async function exportDoc({ markdown: text, dir, out, kinds, d2bin }) {
       }
       // a printed page cannot be clicked open
       for (const d of document.querySelectorAll('details')) d.open = true;
-      mermaid.initialize({ startOnLoad: false, theme: 'default' });
-      let i = 0;
-      for (const code of document.querySelectorAll('pre > code.language-mermaid')) {
-        const box = document.createElement('div');
-        box.className = 'mermaid';
-        const id = 'export' + i++;
-        try {
-          box.innerHTML = (await mermaid.render(id, code.textContent)).svg;
-          code.parentElement.replaceWith(box);
-        } catch {
-          document.getElementById('d' + id)?.remove(); // a broken diagram stays as its source
+      // diagrams off (setup's `diagrams`): fences stay as their source
+      if (diagrams !== false) {
+        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+        let i = 0;
+        for (const code of document.querySelectorAll('pre > code.language-mermaid')) {
+          const box = document.createElement('div');
+          box.className = 'mermaid';
+          const id = 'export' + i++;
+          try {
+            box.innerHTML = (await mermaid.render(id, code.textContent)).svg;
+            code.parentElement.replaceWith(box);
+          } catch {
+            document.getElementById('d' + id)?.remove(); // a broken diagram stays as its source
+          }
         }
       }
       await document.fonts.ready;
-    }, kinds);
+    }, kinds, diagrams);
     // D2 compiles in node, in its own light theme; a broken diagram, or a
     // build without D2, stays as its source
-    const sources = await doc.$$eval('pre > code.language-d2', (codes) => codes.map((c) => c.textContent));
+    const sources = diagrams === false ? [] : await doc.$$eval('pre > code.language-d2', (codes) => codes.map((c) => c.textContent));
     if (sources.length) {
       const svgs = [];
       for (const code of sources) svgs.push(await d2svg(code, undefined, dir, d2bin).catch(() => null));

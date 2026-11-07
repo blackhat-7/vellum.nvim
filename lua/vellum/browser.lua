@@ -12,6 +12,7 @@ local exports = {} -- out → function(error) to call when the export is done
 M.on_update = function() end
 M.waiting = 0 -- counts every answer 'pending': output showing one must not be cached
 M.max_pixels = nil -- most pixels in one rendered PNG, from setup(); nil for no cap
+M.diagrams = true -- mermaid and D2 as pictures, from setup(); false leaves them as code
 
 -- Keep the cache under 100 MB, least recently used out first. Runs once per
 -- session, before any file is shown; request() bumps the mtime of files it uses.
@@ -36,8 +37,8 @@ prune()
 local send -- below; a restarted renderer resends through it
 
 -- Start the renderer, if it is not running. Loading Chrome and mermaid takes
--- ~0.7 s, so the preview starts it on open rather than on the first diagram.
--- Returns an error message, or nil.
+-- ~0.7 s, so it starts with the first picture, not when the preview opens: a
+-- document without one starts no browser. Returns an error message, or nil.
 function M.start()
   if job then return end
   if vim.fn.executable('node') == 0 then return 'node not found: diagrams need Node.js 20.6 or newer' end
@@ -152,8 +153,9 @@ function M.export(req, done)
   local err = M.start()
   if err then return done(err) end
   exports[req.out] = done
-  local d2 = M.d2_command()
+  local d2 = M.diagrams and M.d2_command() or nil
   req.d2bin = d2 and d2.bin
+  req.diagrams = M.diagrams
   job:write(vim.json.encode(req) .. '\n')
 end
 

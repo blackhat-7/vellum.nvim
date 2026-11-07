@@ -11,9 +11,9 @@ local mdx = require('vellum.mdx')
 local api = vim.api
 local M = {}
 
-M.config = { max_width = 100, tab = false, split = 'right', auto_open = false }
+M.config = { max_width = 100, tab = false, split = 'right', auto_open = false, diagrams = true }
 -- every option and its type; max_pixels and size default to nil
-local OPTIONS = { max_width = 'number', max_pixels = 'number', tab = 'boolean', split = 'string', size = 'number', auto_open = 'boolean' }
+local OPTIONS = { max_width = 'number', max_pixels = 'number', tab = 'boolean', split = 'string', size = 'number', auto_open = 'boolean', diagrams = 'boolean' }
 local SPLITS = { right = true, left = true, above = true, below = true }
 
 local ns = api.nvim_create_namespace('vellum')
@@ -167,6 +167,7 @@ function M.setup(opts)
   end
   if #bad > 0 then vim.notify('vellum: ' .. table.concat(bad, '; '), vim.log.levels.WARN) end
   browser.max_pixels = M.config.max_pixels
+  browser.diagrams = M.config.diagrams
   api.nvim_create_augroup('vellum_auto', { clear = true })
   if M.config.auto_open then
     -- markdown in a real file window: hover popups and picker previews are markdown too
@@ -217,7 +218,6 @@ function M.open()
     tabkeys(S.src)
   end
   theme.apply()
-  if image.supported and not image.problem() then browser.start() end
   -- The preview falls back to text on its own; say why, once a session.
   local why = not image.supported and "this terminal can't show images (kitty and Ghostty can), so diagrams show as code"
     or image.problem()

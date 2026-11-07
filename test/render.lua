@@ -103,5 +103,17 @@ if count('class="mermaid"') ~= 1 or count('class="diagram"') ~= 1 or count('lang
 end
 if (vim.uv.fs_stat(dir .. '/doc.pdf') or { size = 0 }).size == 0 then fail('export pdf: empty') end
 
+-- diagrams = false: mermaid and D2 stay as code in the export
+browser.diagrams = false
+local plain, done, err = dir .. '/plain.html', false, nil
+browser.export({ markdown = doc, dir = dir, out = plain, kinds = {} }, function(e) done, err = true, e end)
+vim.wait(60000, function() return done end, 50)
+browser.diagrams = true
+local code = done and not err and table.concat(vim.fn.readfile(plain), '\n') or ''
+local n = function(pat) return select(2, code:gsub(pat, '')) end
+if code == '' or n('language%-mermaid') ~= 1 or n('language%-d2') ~= 2 or n('class="mermaid"') ~= 0 or n('class="diagram"') ~= 0 then
+  fail('export with diagrams off: diagrams not left as code' .. (err and (': ' .. err) or ''))
+end
+
 print(('%d pictures and 2 exports in %.1f s, %d failed'):format(#jobs, (vim.uv.hrtime() - t0) / 1e9, failed))
 vim.cmd(failed == 0 and 'qa!' or 'cq!')

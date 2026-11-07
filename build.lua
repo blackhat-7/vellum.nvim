@@ -1,8 +1,7 @@
--- lazy.nvim runs this on install and update: it installs the browser renderer
--- (diagrams, display math and non-PNG images). :Vellum build runs the same steps in
--- a terminal, from the command list in lua/vellum/build.lua.
+-- lazy.nvim runs this on install and update: it installs the renderer's node
+-- dependencies. The browser is not downloaded here, because it cannot see
+-- setup's `diagrams` option: :Vellum build fetches it when diagrams are on.
 local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h')
-for _, cmd in ipairs(dofile(root .. '/lua/vellum/build.lua').commands) do
-  local r = vim.system(cmd, { cwd = root .. '/render' }):wait()
-  if r.code ~= 0 then error(table.concat(cmd, ' ') .. ' failed:\n' .. r.stderr) end
-end
+local step = dofile(root .. '/lua/vellum/build.lua').deps
+local r = vim.system(step, { cwd = root .. '/render' }):wait()
+if r.code ~= 0 then error(table.concat(step, ' ') .. ' failed:\n' .. r.stderr) end

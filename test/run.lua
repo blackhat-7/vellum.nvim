@@ -692,9 +692,16 @@ do
   check(':Vellum build runs the renderer build', ran, said)
   package.loaded['vellum.build'] = nil
   local build = dofile('lua/vellum/build.lua')
-  check('renderer build installs deps then the headless shell',
-    build.commands[1][1] == 'npm' and build.commands[2][1] == 'npx'
-      and vim.uv.fs_stat(build.root .. '/render/package.json') ~= nil, vim.inspect({ build.root, build.commands }))
+  check('renderer build installs deps, then the browser when diagrams are on',
+    build.deps[1] == 'npm' and build.browser[1] == 'npx'
+      and vim.uv.fs_stat(build.root .. '/render/package.json') ~= nil, vim.inspect({ build.root, build.deps, build.browser }))
+  -- lazy's hook cannot see the diagrams option, so it installs no browser
+  local system, sysargs = vim.system, nil
+  vim.system = function(a, o) sysargs = { a, o }; return { wait = function() return { code = 0, stderr = '' } end } end
+  dofile('build.lua')
+  vim.system = system
+  check('the install hook never downloads a browser',
+    sysargs and sysargs[1][1] == 'npm' and sysargs[1][2] == 'ci' and sysargs[2].cwd:match('/render$') ~= nil, vim.inspect(sysargs))
   -- a root with % and # in it: :terminal {cmd} would have expanded them
   local root = vim.fn.tempname() .. '/a%b#c'
   vim.fn.mkdir(root .. '/render', 'p')
@@ -707,6 +714,18 @@ do
     argv and argv[1] == 'sh' and argv[3] == 'npm ci && npx puppeteer browsers install chrome-headless-shell'
       and opts.term and opts.cwd == root .. '/render' and #vim.api.nvim_list_wins() == wins + 1, vim.inspect({ argv, opts }))
   vim.cmd('close')
+  -- diagrams off: the browser download is skipped
+  argv = nil
+  build.run(false)
+  check(':Vellum build installs no browser when diagrams are off', argv and argv[3] == 'npm ci', vim.inspect(argv))
+  vim.cmd('close')
+  require('vellum').setup({ diagrams = false })
+  argv, said = nil, nil
+  build.run()
+  check(':Vellum build follows diagrams = false', argv and argv[3] == 'npm ci' and said and said:find('diagrams are off'),
+    vim.inspect({ argv, said }))
+  vim.cmd('close')
+  require('vellum').setup({ diagrams = true })
   -- a renderer built by a package manager (Nix) is read-only
   vim.uv.fs_chmod(root .. '/render', tonumber('555', 8))
   said, argv = nil, nil
@@ -744,6 +763,43 @@ do
   vim.cmd('topleft split README.md | wincmd j')
   after('source unloaded by :q, hidden off', function() vim.cmd('quit') end, false)
   vim.o.hidden = true
+end
+
+-- chrome starts with the first picture that needs it, not with the preview:
+-- a text-only document starts no browser
+do
+  local browser, vellum = require('vellum.browser'), require('vellum')
+  local start, supported, problem = browser.start, image.supported, image.problem
+  local started = false
+  browser.start = function() started = true end
+  image.supported, image.problem = true, function() return nil end
+  vim.cmd('silent! only | enew! | silent! %bwipeout!')
+  vim.cmd('enew')
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { '# Only text' })
+  vim.bo.filetype = 'markdown'
+  vellum.open()
+  check('opening a text-only preview starts no renderer', not started)
+  vellum.close()
+  browser.start = function() started = true; return 'no renderer in this test' end
+  local state = browser.diagram('graph TD\n  lazy' .. vim.uv.hrtime(), require('vellum.theme'))
+  check('a picture starts the renderer', started and state == 'error', state)
+  browser.start, image.supported, image.problem = start, supported, problem
+end
+
+-- diagrams = false: mermaid and D2 fences stay code, and ask for no browser
+do
+  local browser, vellum = require('vellum.browser'), require('vellum')
+  local start, supported = browser.start, image.supported
+  local started = false
+  browser.start = function() started = true; return 'no renderer in this test' end
+  image.supported = true
+  vellum.setup({ diagrams = false })
+  local lines = doc('```mermaid\ngraph TD\n  off --> code\n```')
+  check('diagrams = false keeps mermaid as code', find(lines, 'graph TD') and not started, vim.inspect(lines))
+  lines = doc('```d2\noff -> code\n```')
+  check('diagrams = false keeps D2 as code', find(lines, 'off %-> code') and not started, vim.inspect(lines))
+  vellum.setup({ diagrams = true })
+  browser.start, image.supported = start, supported
 end
 
 -- the preview in its own tab: the source keeps its own tab, the preview tab
@@ -821,11 +877,11 @@ do
   local vellum = require('vellum')
   local notify, said = vim.notify, nil
   vim.notify = function(m) said = m end
-  vellum.setup({ max_widht = 80, tab = 'yes', split = 'top', size = 0.5, max_width = 90 })
+  vellum.setup({ max_widht = 80, tab = 'yes', split = 'top', size = 0.5, max_width = 90, diagrams = 'yes' })
   check('setup names every bad option', said and said:find('max_widht') and said:find('tab should be a boolean')
-    and said:find('split should be') and said:find('size should be'), said)
+    and said:find('split should be') and said:find('size should be') and said:find('diagrams should be a boolean'), said)
   check('setup keeps good options and defaults for bad ones', vellum.config.max_width == 90 and vellum.config.tab == false
-    and vellum.config.split == 'right' and vellum.config.size == nil, vim.inspect(vellum.config))
+    and vellum.config.split == 'right' and vellum.config.size == nil and vellum.config.diagrams == true, vim.inspect(vellum.config))
   said = nil
   vellum.setup({ max_width = 100 })
   check('good options say nothing', said == nil, said)

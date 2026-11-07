@@ -77,6 +77,7 @@ end
 -- A diagram in `lang`, 'mermaid' or 'd2', as a picture; its code while it
 -- first renders, or with the error when it cannot.
 function M.diagram(code, width, row, lang)
+  if not browser.diagrams then return M.panel(code, lang, width) end
   if image.problem() then return M.panel(code, lang, width, nil, image.problem()) end
   local state, a, b = browser.diagram(code, theme, lang, media.dir)
   if state == 'ready' then

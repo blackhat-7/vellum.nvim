@@ -804,17 +804,24 @@ end
 -- chromium = false: mermaid and D2 fences stay code, and ask for no browser
 do
   local browser, vellum = require('vellum.browser'), require('vellum')
-  local start, supported = browser.start, image.supported
+  local start, supported, problem = browser.start, image.supported, image.problem
   local started = false
   browser.start = function() started = true; return 'no renderer in this test' end
-  image.supported = true
+  image.supported, image.problem = true, function() return nil end
+  -- a cached picture must not survive a backend switch
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { '```mermaid', 'graph TD', '  switched --> back', '```' })
+  local first = render.render(buf, 84, 100)
   vellum.setup({ chromium = false })
+  local second = render.render(buf, 84, 100)
+  check('setup drops cached pictures when the backend changes', find(first, '✗') and not find(second, '✗'), vim.inspect({ first, second }))
+  started = false -- the first render above used the renderer; the checks below must not
   local lines = doc('```mermaid\ngraph TD\n  off --> code\n```')
   check('chromium = false keeps mermaid as code', find(lines, 'graph TD') and not started, vim.inspect(lines))
   lines = doc('```d2\noff -> code\n```')
   check('chromium = false keeps D2 as code', find(lines, 'off %-> code') and not started, vim.inspect(lines))
   vellum.setup({ chromium = true })
-  browser.start, image.supported = start, supported
+  browser.start, image.supported, image.problem = start, supported, problem
 end
 
 -- zero-Chromium export: HTML only; PDF needs the browser
@@ -824,9 +831,25 @@ do
   local text = state.backend
   local said
   text.export({ out = '/tmp/vellum-test.pdf', markdown = '# x', dir = '.', kinds = {} }, function(e) said = e end)
+  -- the default :Vellum export path follows the backend
+  local export, default = text.export, nil
+  text.export = function(req, done) default = req.out; done(nil) end
+  local notify = vim.notify
+  vim.notify = function() end
+  vim.cmd('silent! only | enew! | silent! %bwipeout!')
+  vim.cmd('enew')
+  vim.bo.filetype = 'markdown'
+  local file = vim.fn.tempname() .. '.md'
+  vim.api.nvim_buf_set_name(0, file)
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { '# x' })
+  vellum.export()
+  vim.notify = notify
+  text.export = export
   vellum.setup({ chromium = true })
   check('chromium = false: exports HTML and refuses PDF',
     text.extension == 'html' and said and said:find('PDF') and said:find('chromium = false'), vim.inspect({ text.extension, said }))
+  local want = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':p:r') .. '.html'
+  check('chromium = false: export defaults to HTML', default == want, vim.inspect({ default, want }))
 end
 
 -- the preview in its own tab: the source keeps its own tab, the preview tab

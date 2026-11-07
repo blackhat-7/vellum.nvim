@@ -7,7 +7,7 @@ local root = debug.getinfo(1, 'S').source:sub(2):match('(.*)/lua/vellum/') .. '/
 
 local M = {}
 
-function M.diagram(source, width, row, lang) return code.panel(source, lang, width) end
+function M.diagram(source, width, _row, lang) return code.panel(source, lang, width) end
 function M.math() return nil end
 function M.image() return nil end
 function M.inline() return nil end
@@ -64,7 +64,12 @@ function M.export(req, done)
     exports[req.out] = nil
     return done('cannot start node: ' .. tostring(proc))
   end
-  proc:write(vim.json.encode(req) .. '\n')
+  local wrote, err = pcall(proc.write, proc, vim.json.encode(req) .. '\n')
+  if not wrote and not answered then
+    answered = true
+    exports[req.out] = nil
+    return done('cannot write to node: ' .. tostring(err))
+  end
 end
 
 function M.health(h)

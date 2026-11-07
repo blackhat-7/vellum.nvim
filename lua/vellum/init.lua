@@ -13,7 +13,10 @@ local M = {}
 
 M.config = { max_width = 100, tab = false, split = 'right', auto_open = false, chromium = true }
 -- every option and its type; max_pixels and size default to nil
-local OPTIONS = { max_width = 'number', max_pixels = 'number', tab = 'boolean', split = 'string', size = 'number', auto_open = 'boolean', chromium = 'boolean' }
+local OPTIONS = {
+  max_width = 'number', max_pixels = 'number', tab = 'boolean', split = 'string',
+  size = 'number', auto_open = 'boolean', chromium = 'boolean',
+}
 local SPLITS = { right = true, left = true, above = true, below = true }
 
 local ns = api.nvim_create_namespace('vellum')
@@ -150,6 +153,7 @@ M.redraw = draw
 -- A mistyped or misspelled option is skipped with a warning; it would
 -- otherwise do nothing without a word.
 function M.setup(opts)
+  local was_chromium, was_pixels = state.chromium, M.config.max_pixels
   local bad = {}
   for k, v in pairs(opts or {}) do
     local want = OPTIONS[k]
@@ -168,6 +172,10 @@ function M.setup(opts)
   if #bad > 0 then vim.notify('vellum: ' .. table.concat(bad, '; '), vim.log.levels.WARN) end
   state.use(M.config.chromium)
   state.backend.configure(M.config)
+  if was_chromium ~= M.config.chromium or was_pixels ~= M.config.max_pixels then
+    render.reset()
+    if valid() then update() end
+  end
   api.nvim_create_augroup('vellum_auto', { clear = true })
   if M.config.auto_open then
     -- markdown in a real file window: hover popups and picker previews are markdown too
@@ -359,7 +367,7 @@ function M.export(path)
   vim.notify('vellum: exporting to ' .. path .. ' …')
   local text = table.concat(mdx.lines(buf), '\n')
   local dir = name ~= '' and vim.fs.dirname(vim.fn.fnamemodify(name, ':p')) or vim.fn.getcwd()
-  local kinds = {} -- callout type → its color, as in the preview
+  local kinds = {} -- callout type → its CSS class, as in the preview
   for kind, a in pairs(render.alerts) do kinds[kind:lower()] = a[2]:lower() end
   state.backend.export({ markdown = text, dir = dir, out = path, kinds = kinds }, function(err)
     if err then

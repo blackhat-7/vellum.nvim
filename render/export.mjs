@@ -6,15 +6,22 @@
 // D2 fences stay as code.
 import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline';
 import { EXPORT_CSS, dataUrl, exporter, katexCss } from './document.mjs';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ESC[c]);
-const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'", nbsp: ' ' };
-const decode = (s) => s.replace(/&(#39|amp|lt|gt|quot|apos|nbsp);/g, (_, e) => ENTITIES[e]);
-const stripTags = (html) => decode(html.replace(/<[^>]*>/g, ''));
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' };
+const decode = (s) => s.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e) => {
+  if (e[0] === '#') {
+    const hex = e[1].toLowerCase() === 'x';
+    const code = parseInt(hex ? e.slice(2) : e.slice(1), hex ? 16 : 10);
+    try { return String.fromCodePoint(code); } catch { return m; }
+  }
+  return ENTITIES[e.toLowerCase()] ?? m;
+});
+const stripTags = (html) => decode(html.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ''));
 
 // GitHub's heading ids, so "#heading" links work; same rule as browser.mjs
 const slug = (text) => text.trim().toLowerCase().replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, '').replace(/ /g, '-');
@@ -26,7 +33,7 @@ function headings(html) {
     const count = seen.get(base) ?? 0;
     seen.set(base, count + 1);
     const id = count ? `${base}-${count}` : base;
-    return `<h${level}${attrs.replace(/\sid="[^"]*"/, '')} id="${escapeHtml(id)}">${inner}</h${level}>`;
+    return `<h${level}${attrs.replace(/\sid=(?:"[^"]*"|'[^']*')/, '')} id="${escapeHtml(id)}">${inner}</h${level}>`;
   });
 }
 
@@ -44,6 +51,14 @@ function alerts(html, kinds) {
 function images(html, dir) {
   const cache = new Map();
   const local = (src) => {
+    if (src.startsWith('file:')) {
+      if (!cache.has(src)) {
+        let url = null;
+        try { url = dataUrl(fileURLToPath(src.replace(/[?#].*$/, ''))); } catch {}
+        cache.set(src, url);
+      }
+      return cache.get(src);
+    }
     if (/^[a-z][\w+.-]*:/i.test(src) || src.startsWith('//')) return null;
     const [path] = src.split(/[?#]/);
     let decoded;
@@ -60,7 +75,7 @@ function images(html, dir) {
     const m = /\bsrc=(?:"([^"]*)"|'([^']*)')/i.exec(tag);
     if (!m) return tag;
     const data = local(decode(m[1] ?? m[2]));
-    return data ? tag.replace(m[0], `src="${data}"`) : tag;
+    return data ? tag.replace(m[0], () => `src="${data}"`) : tag;
   });
 }
 
@@ -72,11 +87,12 @@ function links(html, dir, beside) {
     if (!m) return tag;
     const href = decode(m[1] ?? m[2]);
     if (href.startsWith('#') || /^[a-z][\w+.-]*:/i.test(href) || href.startsWith('//')) return tag;
-    const [path, fragment] = href.split('#');
+    const [pathAndQuery, fragment] = href.split('#');
+    const [path, query] = pathAndQuery.split('?');
     let decoded;
     try { decoded = decodeURIComponent(path); } catch { decoded = path; }
-    const url = pathToFileURL(resolve(dir, decoded)).href + (fragment ? '#' + fragment : '');
-    return tag.replace(m[0], `href="${escapeHtml(url)}"`);
+    const url = pathToFileURL(resolve(dir, decoded)).href + (query ? '?' + query : '') + (fragment ? '#' + fragment : '');
+    return tag.replace(m[0], () => `href="${escapeHtml(url)}"`);
   });
 }
 

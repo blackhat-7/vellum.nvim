@@ -217,8 +217,8 @@ const formula = ({ math, color }) => page.evaluate(async (tex, color) => {
   return null;
 }, math, color);
 
-// Exports: the page turns mermaid and D2 into SVGs and prints the result.
-// The HTML itself (marked, KaTeX, alerts, heading ids) is built here too.
+// Exports: the HTML comes from document.mjs; the page adds alerts, heading
+// ids and diagram SVGs, then prints the result.
 async function exportDoc({ markdown: text, dir, out, kinds, d2bin }) {
   const md = await exporter().catch((e) => {
     throw new Error('export needs a rebuilt renderer (:Vellum build): ' + e.message);

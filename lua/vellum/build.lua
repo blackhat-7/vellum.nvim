@@ -6,7 +6,8 @@ local state = require('vellum.state')
 
 local M = {}
 
-M.deps, M.browser = install.deps, install.browser -- the root hook and tests read these
+-- tests read these; the root build.lua loads install.lua directly
+M.deps, M.browser = install.deps, install.browser
 M.root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h')
 
 function M.run()
@@ -14,7 +15,8 @@ function M.run()
   -- a package manager that builds the renderer (Nix) leaves it read-only,
   -- where npm ci can only fail
   if not vim.uv.fs_access(dir, 'W') then
-    vim.notify('vellum: ' .. dir .. ' is read-only: your package manager installed the renderer, so rebuild it there', vim.log.levels.ERROR)
+    vim.notify('vellum: ' .. dir .. ' is read-only: your package manager installed the renderer, so rebuild it there',
+      vim.log.levels.ERROR)
     return
   end
   local steps = vim.tbl_map(function(c) return table.concat(c, ' ') end, state.backend.commands)

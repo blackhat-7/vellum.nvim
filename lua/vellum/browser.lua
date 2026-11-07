@@ -36,11 +36,12 @@ prune()
 local send -- below; a restarted renderer resends through it
 
 -- Start the renderer, if it is not running. Loading Chrome and mermaid takes
--- ~0.7 s, so it starts with the first picture, not when the preview opens: a
--- document without one starts no browser. Returns an error message, or nil.
+-- ~0.7 s, so it starts with the first picture or export, not when the preview
+-- opens: a document without a picture starts no browser. Returns an error
+-- message, or nil.
 function M.start()
   if job then return end
-  if vim.fn.executable('node') == 0 then return 'node not found: diagrams need Node.js 20.6 or newer' end
+  if vim.fn.executable('node') == 0 then return 'node not found: pictures and export need Node.js 20.6 or newer' end
   if not vim.uv.fs_stat(root .. '/node_modules') then return 'renderer not built: run :Vellum build' end
   vim.fn.mkdir(dir, 'p')
   local partial, stderr, answered = '', '', false
@@ -145,8 +146,8 @@ function M.drop_stale()
 end
 
 -- Write req.markdown, whose relative links resolve in req.dir, to req.out: a
--- .pdf or .html file, drawing D2 as diagrams do. req.kinds maps callout types to colors. Calls
--- done(error) when finished; error is nil on success.
+-- .pdf or .html file, drawing D2 as diagrams do. req.kinds maps callout types
+-- to CSS classes. Calls done(error) when finished; error is nil on success.
 function M.export(req, done)
   if exports[req.out] then return done('already exporting to ' .. req.out) end
   local err = M.start()

@@ -109,9 +109,11 @@ state.use(false)
 local text = state.backend
 local no_browser = dir .. '/no-browser'
 vim.fn.mkdir(no_browser, 'p')
-local plain_doc = '# Export\n\n> [!NOTE] Title\n> alert body\n\n$$x^2$$\n\n![logo](' .. root
-  .. '/test/images/logo.svg)\n\n```mermaid\ngraph LR; A --> B\n```\n\n```d2\nx -> y\n```\n\n```d2\nx ->\n```\n'
-local plain, done, err = no_browser .. '/plain.html', false, nil
+local plain_doc = '# Export\n\n# Export\n\n> [!NOTE] Title\n> alert body\n\n$$x^2$$\n\n![logo](<' .. root
+  .. '/test/images/logo.svg>)\n\n![logo2](<file://' .. root .. '/test/images/logo.svg>)\n\n[other](other.md)\n\n'
+  .. '```mermaid\ngraph LR; A --> B\n```\n\n```d2\nx -> y\n```\n\n```d2\nx ->\n```\n\n'
+  .. '<details><summary>more</summary>hidden</details>\n\n<script>alert(1)</script>\n'
+local plain, done, err = dir .. '/plain.html', false, nil -- elsewhere: links point back at dir
 local puppeteer = vim.env.PUPPETEER_EXECUTABLE_PATH
 vim.env.PUPPETEER_EXECUTABLE_PATH = '/nonexistent' -- proves the export launches no Chrome
 text.export({ markdown = plain_doc, dir = no_browser, out = plain, kinds = { note = 'note' } }, function(e) done, err = true, e end)
@@ -123,8 +125,10 @@ local n = function(pat) return select(2, code:gsub(pat, '')) end
 if code == '' or n('language%-mermaid') ~= 1 or n('language%-d2') ~= 2 or n('class="mermaid"') ~= 0 or n('class="diagram"') ~= 0 then
   fail('export with chromium off: diagrams not left as code' .. (err and (': ' .. err) or ''))
 elseif n('class="alert note"') ~= 1 or n('class="title">Title') ~= 1 or n('class="katex"') < 1
-  or n('id="export"') ~= 1 or n('src="data:image/svg%+xml;base64,') ~= 1 then
-  fail('export with chromium off: math, alert, heading or image missing' .. (err and (': ' .. err) or ''))
+  or n('id="export"') ~= 1 or n('id="export%-1"') ~= 1
+  or n('src="data:image/svg%+xml;base64,') ~= 2 or n('href="file:[^"]*other%.md"') ~= 1
+  or n('<details open>') ~= 1 or n('<script') ~= 0 then
+  fail('export with chromium off: math, alert, headings, images, link or details missing' .. (err and (': ' .. err) or ''))
 end
 
 print(('%d pictures and 3 exports in %.1f s, %d failed'):format(#jobs, (vim.uv.hrtime() - t0) / 1e9, failed))

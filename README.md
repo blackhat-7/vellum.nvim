@@ -1,12 +1,12 @@
 # vellum.nvim
 
-A markdown preview for Neovim. It renders in a split beside your buffer, inside the terminal. GitHub-flavored markdown, with mermaid diagrams and display math as real images.
+A markdown preview for Neovim. It renders in a split beside your buffer, inside the terminal. GitHub-flavored markdown, with mermaid and D2 diagrams and display math as real images.
 
 ![Demo on docs/showcase.md: open the preview, edit a label in a large architecture diagram, zoom and pan it, scroll the preview with the mouse through KaTeX math and a saga sequence diagram, a state machine, resize the split](docs/demo.webp)
 
 - **Live.** Every keystroke re-renders. Unchanged blocks come from a cache, so long documents stay fast.
 - **Scroll sync, both ways.** The preview follows your cursor. Scrolling the preview scrolls the source.
-- **Diagrams.** Mermaid renders in a headless Chrome and shows as an image, sized to your terminal font. Each one renders once and is cached on disk (capped at 100 MB).
+- **Diagrams.** Mermaid and D2 render in a headless Chrome and show as images, sized to your terminal font. Each one renders once and is cached on disk (capped at 100 MB).
 - **Zoom.** Open any diagram or image full-screen, then zoom and pan with keys or the mouse.
 - **Math.** Inline `$…$` becomes Unicode text; display math renders with KaTeX.
 - **Styled.** Heading bands, code with syntax colors, tables, GitHub alerts, task lists, `<details>` blocks, inline badges. Colors come from your colorscheme.
@@ -23,7 +23,7 @@ Colors follow your colorscheme, light or dark, diagrams included:
 ## Requirements
 
 - Neovim ≥ 0.12 with `termguicolors`
-- Node.js ≥ 20 (for mermaid diagrams and non-PNG images)
+- Node.js ≥ 20 (for diagrams and non-PNG images)
 - For images: [kitty](https://sw.kovidgoyal.net/kitty/) or [Ghostty](https://ghostty.org). Works over ssh. In tmux, add:
   ```tmux
   set -g allow-passthrough on
@@ -104,6 +104,10 @@ silently drop large images: herdr 0.9.5 shows nothing above about 5.9
 megapixels. Set `max_pixels = 5.5e6` there, and big diagrams render at a lower
 scale instead. They keep their size in the preview but look softer when zoomed.
 
+## D2
+
+` ```d2 ` blocks render like mermaid, with no extra install. A diagram's own `vars: { d2-config: { ... } }` wins: its `theme-id`, `theme-overrides`, `pad`, `sketch` and `layout-engine` (`elk` too). Icons can be URLs or files; file paths are relative to the markdown file. Markdown, LaTeX and code labels render. Only the main board shows, as with `d2 in.d2 out.png`; `layers`, `scenarios` and `steps` are not drawn. Exports draw D2 in its default light theme.
+
 ## Supported
 
 | Markdown | Rendering |
@@ -115,7 +119,7 @@ scale instead. They keep their size in the preview but look softer when zoomed.
 | Obsidian callouts (`> [!question]- Title`), `==highlight==`, `[[wikilinks]]` | callout colors and titles, marked text, links you can follow |
 | Tables | aligned, wrapped to fit, zebra rows |
 | Fenced code | tree-sitter syntax colors, language label |
-| ` ```mermaid ` | image (text fallback outside kitty/Ghostty) |
+| ` ```mermaid `, ` ```d2 ` | image in your colorscheme's colors (text fallback outside kitty/Ghostty) |
 | Footnotes | superscript refs, muted notes |
 | Math: `$…$`, `$$…$$`, ` ```math ` | inline as Unicode text (`x²`, `α ≤ β`); display math as a KaTeX image (Unicode text elsewhere) |
 | Images: PNG, JPG, GIF, WebP, SVG, local or http(s) | image (alt text elsewhere) |

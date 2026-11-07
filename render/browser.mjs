@@ -1,5 +1,6 @@
 // Headless-browser PNG renderer. Reads one JSON request per stdin line:
 //   {"out": "/abs/file.png", "code": "...", "theme": {...}}   a mermaid diagram
+//   {"out": "/abs/file.png", "d2": "...", "theme": {...}, "dir": "/abs/dir"}   a D2 diagram; local icons resolve in dir
 //   {"out": "/abs/file.png", "image": "/abs/path or https://..."}   any image the browser can show
 //   {"out": "/abs/file.png", "math": "\\frac{a}{b}", "color": "#rrggbb"}   display math, by KaTeX
 //   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir", "kinds": {...}}   a document export
@@ -19,7 +20,7 @@ const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
 
 const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox'] }).catch((e) => {
   // one short last line: the plugin shows it in place of each diagram
-  console.error('cannot start the browser (run :Lazy build vellum.nvim): ' + String(e.message).split('\n')[0]);
+  console.error('cannot start the browser (run :Vellum build): ' + String(e.message).split('\n')[0]);
   process.exit(1);
 });
 // without Chrome every render would fail; exiting lets the plugin start a new one
@@ -86,6 +87,64 @@ const diagram = ({ code, theme }) => page.evaluate(async (code, id, theme) => {
     return String(e?.message ?? e).slice(0, 600);
   }
 }, code, 'm' + n++, theme ?? {});
+
+// D2 compiles to SVG in node (WebAssembly) and loads on the first D2 diagram,
+// so documents without one pay nothing and an older build still draws mermaid.
+// `theme` is { themeID, themeOverrides }; without it, D2's own light theme (exports).
+// Local icon paths resolve in `dir` and go in as data: an about:blank page may not read files.
+let d2;
+async function d2svg(code, theme, dir) {
+  d2 ??= await import('@terrastruct/d2').then((m) => new m.D2(), (e) => {
+    throw new Error('D2 needs a rebuilt renderer (:Vellum build): ' + e.message);
+  });
+  const r = await d2.compile(code).catch((e) => {
+    // compile errors arrive as JSON: [{"errmsg": "index:3:5: ..."}], index being the source
+    let list;
+    try { list = JSON.parse(e.message); } catch { throw e; }
+    throw new Error(list.map((x) => x.errmsg.replace(/^index:/, 'line ')).join('\n'));
+  });
+  // the diagram's own d2-config wins: its padding, theme or theme-overrides
+  const own = r.diagram.config ?? {};
+  const options = { ...r.renderOptions, pad: own.pad ?? 0, noXMLTag: true };
+  if (theme && !own.themeID && !r.renderOptions.themeOverrides) Object.assign(options, theme);
+  for (const shape of r.diagram.shapes) {
+    const icon = shape.icon; // a Go url.URL; data: URLs keep their payload in Opaque
+    if (!icon || icon.Scheme || !dir) continue;
+    const file = resolve(dir, icon.Path);
+    let data;
+    try { data = readFileSync(file).toString('base64'); } catch { continue; } // missing: an empty icon, as D2 shows it
+    shape.icon = { ...icon, Scheme: 'data', Opaque: `${MIME[extname(file).toLowerCase()] ?? 'application/octet-stream'};base64,${data}`, Path: '', RawPath: '' };
+  }
+  return d2.render(r.diagram, options);
+}
+
+const d2diagram = async ({ d2: code, theme, dir }) => {
+  let svg;
+  try {
+    svg = await d2svg(code, theme, dir);
+  } catch (e) {
+    return String(e?.message ?? e).slice(0, 600);
+  }
+  return page.evaluate(async (svg) => {
+    const c = document.getElementById('c');
+    c.innerHTML = svg;
+    // icons load after the svg is in; listening in this same task misses none.
+    // One that fails or hangs leaves its space empty, the diagram still shows
+    const icons = [...c.querySelectorAll('image')].map((i) => new Promise((done) => {
+      i.addEventListener('load', done);
+      i.addEventListener('error', done);
+      setTimeout(done, 10000);
+    }));
+    // the outer svg has only a viewBox; unsized, it collapses in the shrink-wrapped box
+    const s = c.firstElementChild;
+    const [, , w, h] = s.getAttribute('viewBox').split(/[\s,]+/);
+    s.setAttribute('width', w);
+    s.setAttribute('height', h);
+    await Promise.all(icons);
+    await document.fonts.ready; // D2 embeds its fonts; a shot before they load shows fallback glyphs
+    return null;
+  }, svg);
+};
 
 const picture = ({ image }) => {
   // local files go in as data URLs: an about:blank page may not read file://
@@ -178,14 +237,15 @@ blockquote.alert { color: inherit; }
 .warning { border-color: #9a6700; } .warning > .title { color: #9a6700; }
 .caution { border-color: #d1242f; } .caution > .title { color: #d1242f; }
 li:has(> input[type=checkbox]) { list-style: none; }
-img, .mermaid svg { max-width: 100%; }
-.mermaid { text-align: center; }
-pre, table, img, .mermaid, .katex-display { break-inside: avoid; }
+img, .mermaid svg, .diagram svg { max-width: 100%; }
+.diagram svg { height: auto; }
+.mermaid, .diagram { text-align: center; }
+pre, table, img, .mermaid, .diagram, .katex-display { break-inside: avoid; }
 `;
 
 async function exportDoc({ markdown: text, dir, out, kinds }) {
   markdown ??= await exporter().catch((e) => {
-    throw new Error('export needs a rebuilt renderer (:Lazy build vellum.nvim): ' + e.message);
+    throw new Error('export needs a rebuilt renderer (:Vellum build): ' + e.message);
   });
   // a file:// page may load the document's relative images; about:blank may not
   const tmp = join(tmpdir(), `vellum-export-${process.pid}-${n++}.html`);
@@ -231,6 +291,28 @@ async function exportDoc({ markdown: text, dir, out, kinds }) {
       }
       await document.fonts.ready;
     }, kinds);
+    // D2 compiles in node, in its own light theme; a broken diagram, or a
+    // build without D2, stays as its source
+    const sources = await doc.$$eval('pre > code.language-d2', (codes) => codes.map((c) => c.textContent));
+    if (sources.length) {
+      const svgs = [];
+      for (const code of sources) svgs.push(await d2svg(code, undefined, dir).catch(() => null));
+      await doc.evaluate(async (svgs) => {
+        const codes = [...document.querySelectorAll('pre > code.language-d2')];
+        svgs.forEach((svg, i) => {
+          if (!svg) return;
+          const box = document.createElement('div');
+          box.className = 'diagram';
+          box.innerHTML = svg;
+          const s = box.firstElementChild;
+          const [, , w, h] = s.getAttribute('viewBox').split(/[\s,]+/);
+          s.setAttribute('width', w);
+          s.setAttribute('height', h);
+          codes[i].parentElement.replaceWith(box);
+        });
+        await document.fonts.ready;
+      }, svgs);
+    }
     if (out.endsWith('.pdf')) {
       await doc.pdf({ path: out, format: 'A4', printBackground: true, margin: { top: '12mm', bottom: '12mm', left: '10mm', right: '10mm' } });
     } else {
@@ -296,7 +378,7 @@ function withDensity(png, scale) {
 async function render(req) {
   if (req.markdown != null) return exportDoc(req);
   // diagrams keep the container's padding; images and math are shot at their own size
-  const [draw, shot] = req.image ? [picture, '#c img'] : req.math != null ? [formula, '#m'] : [diagram, '#c'];
+  const [draw, shot] = req.image ? [picture, '#c img'] : req.math != null ? [formula, '#m'] : req.d2 != null ? [d2diagram, '#c'] : [diagram, '#c'];
   const error = await draw(req);
   if (error) return { out: req.out, error };
   const element = await page.$(shot);

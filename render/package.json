@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@terrastruct/d2": "^0.1.33",
     "katex": "^0.16.47",
     "marked": "^18.0.14",
     "marked-footnote": "^1.4.0",

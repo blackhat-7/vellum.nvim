@@ -31,3 +31,6 @@ Each line carries its own done-check.
 - [x] `:Vellum export [file.pdf|file.html]`. Done: showcase + edge-case docs exported and checked page by page.
 - [x] Setting to open the preview in a new tab, not side by side. Done: `nvim --clean -l test/run.lua` green; the preview fills its own tab and takes the focus, `q` closes it with the tab, and it closes with its source.
 - [x] MDX: filetypes `mdx`/`markdown.mdx` count as markdown; `import`/`export` and `{/* */}` hidden in place; `.mdx` links open in the editor. Done: 12 checks, fail before / pass after; perf unchanged.
+- [x] `:Vellum build` for any plugin manager (zulacore, #3). Done: a real build in a fresh copy renders; `%`/`#` paths and a read-only (Nix) renderer checked.
+- [x] `max_pixels` cap for multiplexers that drop big images (joaoptpsa). Done: a capped render stays under the cap, PNG CRCs valid, the next shot is 2x again.
+- [x] D2 diagrams in the colorscheme's colors, with icons, export and a health check (issue #2). Done: checks green; sketch, ELK, markdown, LaTeX, code, icons rendered and looked at; export PDF checked.

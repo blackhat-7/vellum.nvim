@@ -7,16 +7,24 @@ local h = vim.health
 local function renderer()
   local browser, theme = require('vellum.browser'), require('vellum.theme')
   theme.apply()
-  local code = 'flowchart LR\n  A[checkhealth ' .. vim.uv.hrtime() .. ']'
-  local state, err
-  vim.wait(20000, function()
-    state, err = browser.diagram(code, theme)
-    return state ~= 'pending'
-  end, 100)
-  if state == 'ready' then
-    h.ok('renderer works (mermaid diagram rendered)')
+  local function render(code, lang)
+    local state, err
+    vim.wait(20000, function()
+      state, err = browser.diagram(code, theme, lang)
+      return state ~= 'pending'
+    end, 100)
+    return state == 'ready', err or (state == 'pending' and 'no answer in 20 s')
+  end
+  local ok, err = render('flowchart LR\n  A[checkhealth ' .. vim.uv.hrtime() .. ']', 'mermaid')
+  if not ok then
+    return h.error('renderer failed: ' .. err, { 'Rebuild it: :Vellum build' })
+  end
+  h.ok('renderer works (mermaid diagram rendered)')
+  ok, err = render('checkhealth -> ' .. vim.uv.hrtime(), 'd2')
+  if ok then
+    h.ok('D2 diagrams render')
   else
-    h.error('renderer failed: ' .. (err or 'no answer in 20 s'), { 'Rebuild it: :Vellum build' })
+    h.error('D2 failed: ' .. err, { 'Rebuild the renderer: :Vellum build' })
   end
 end
 

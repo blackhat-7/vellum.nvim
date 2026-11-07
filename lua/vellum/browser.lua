@@ -1,5 +1,5 @@
 -- Bridge to render/browser.mjs: one long-lived headless browser turns mermaid
--- diagrams, display math and non-PNG images into PNGs, cached on disk by content hash.
+-- and D2 diagrams, display math and non-PNG images into PNGs, cached on disk by content hash.
 local image = require('vellum.image')
 
 local M = {}
@@ -153,7 +153,30 @@ function M.export(req, done)
   job:write(vim.json.encode(req) .. '\n')
 end
 
-function M.diagram(code, theme)
+-- Local D2 icon files are part of the picture, so their versions are part of
+-- its key: an edited icon renders anew, like an edited image (media.lua).
+local function icon_versions(code, dir)
+  local out = {}
+  for line in code:gmatch('[^\n]+') do
+    for value in line:gmatch('icon%s*:%s*([^;}]+)') do
+      local path = vim.trim(value):gsub('^(["\'])(.*)%1$', '%2')
+      if not path:match('^%a[%w+.-]*:') then -- a URL is fetched as it is
+        local stat = vim.uv.fs_stat(vim.fs.joinpath(dir, path))
+        out[#out + 1] = path .. '\0' .. (stat and stat.mtime.sec .. '.' .. stat.size or '')
+      end
+    end
+  end
+  return table.concat(out, '\0')
+end
+
+-- A diagram in `lang`, 'mermaid' or 'd2', in the colorscheme's colors. D2's
+-- local icons resolve in `dir`, the markdown file's folder.
+function M.diagram(code, theme, lang, dir)
+  if lang == 'd2' then
+    dir = dir or vim.fn.getcwd()
+    local key = table.concat({ 'd2', theme.d2_signature, dir, icon_versions(code, dir), code }, '\0')
+    return request(key, { d2 = code, theme = theme.d2, dir = dir })
+  end
   return request(theme.signature .. code, { code = code, theme = theme.mermaid })
 end
 

@@ -480,6 +480,34 @@ do
   check('capped diagram keeps its width', cols(wide) == cols(narrow), cols(wide) .. ' vs ' .. cols(narrow))
 end
 
+-- D2: fenced like mermaid; shown as code without image support, else a
+-- picture keyed by theme, folder, local icon versions and code
+do
+  local lines = doc('```d2\nserver -> db: query\n```')
+  check('d2 without images shows its code', find(lines, 'server %-> db: query') ~= nil)
+  local browser = require('vellum.browser')
+  local theme = require('vellum.theme')
+  local cache = vim.fn.stdpath('cache') .. '/vellum'
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir .. '/icons', 'p')
+  vim.fn.writefile({ '<svg/>' }, dir .. '/icons/a b.svg')
+  local code = 'a: { icon: "./icons/a b.svg" }\nb.icon: https://example.com/b.svg\na -> b'
+  local function key()
+    local s = vim.uv.fs_stat(dir .. '/icons/a b.svg')
+    return table.concat({ 'd2', theme.d2_signature, dir, './icons/a b.svg\0' .. s.mtime.sec .. '.' .. s.size, code }, '\0')
+  end
+  local function cached(k) return write_png(cache .. '/' .. vim.fn.sha256(k):sub(1, 32) .. '.png', 300, 100, phys(7559)) end
+  local first = cached(key())
+  local state, file = browser.diagram(code, theme, 'd2', dir)
+  check('d2 diagram is found by its key, a URL icon not read as a file', state == 'ready' and file == first, vim.inspect({ state, file }))
+  vim.fn.writefile({ '<svg></svg>' }, dir .. '/icons/a b.svg') -- one byte more
+  local second = cached(key())
+  state, file = browser.diagram(code, theme, 'd2', dir)
+  check('an edited local icon is a new d2 picture', state == 'ready' and file == second and second ~= first, vim.inspect({ state, file }))
+  check('the d2 theme follows the lightness of the colorscheme',
+    theme.d2.themeID == (vim.o.background == 'dark' and 200 or 0) and theme.d2.themeOverrides.N7 == theme.mermaid.background)
+end
+
 -- Obsidian: callouts, ==highlight==, [[wikilinks]]
 do
   local lines = doc('> [!question]- Why *here*?\n> body line')

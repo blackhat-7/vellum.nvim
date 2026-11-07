@@ -5,17 +5,19 @@
 
 ## What this is
 
-A Neovim plugin: `:Vellum` opens a live, beautifully rendered GitHub-markdown preview in a split beside the buffer you edit. Mermaid diagrams render as real images. Installed with lazy.nvim.
+A Neovim plugin: `:Vellum` opens a live, beautifully rendered GitHub-markdown preview in a split beside the buffer you edit. Mermaid and D2 diagrams render as real images. Installed with lazy.nvim, `:Vellum build` or Nix.
 
 - `lua/vellum/render.lua` — markdown blocks (tree-sitter) → styled lines + scroll anchors. Caches per block.
 - `lua/vellum/inline.lua` — inline markdown → styled segments; word wrap.
-- `lua/vellum/code.lua` — code panels with syntax colors; mermaid diagrams.
+- `lua/vellum/code.lua` — code panels with syntax colors; mermaid and D2 diagrams.
 - `lua/vellum/latex.lua` — LaTeX math → Unicode text (inline); KaTeX pictures (display).
 - `lua/vellum/media.lua` — images (local, remote, any format) → placeholder lines.
 - `lua/vellum/init.lua` — preview window, autocmds, scroll sync.
 - `lua/vellum/theme.lua` — palette derived from the active colorscheme.
 - `lua/vellum/image.lua` — kitty graphics via Unicode placeholders (works through tmux).
-- `lua/vellum/browser.lua` + `render/browser.mjs` — one long-lived headless Chrome turns diagrams, display math and non-PNG images into cached PNGs.
+- `lua/vellum/browser.lua` + `render/browser.mjs` — one long-lived headless Chrome turns diagrams (mermaid; D2 via WebAssembly), display math and non-PNG images into cached PNGs.
+- `lua/vellum/mdx.lua` — MDX: which buffers count, which top-level blocks hide.
+- `lua/vellum/build.lua` — `:Vellum build`: installs the renderer in a terminal.
 - `build.lua` — lazy.nvim runs it on install: `npm ci` + headless shell download.
 - `flake.nix` + `nix/package.nix` — Nix package and nixvim module; renderer and browser prebuilt.
 

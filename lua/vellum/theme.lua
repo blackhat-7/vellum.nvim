@@ -105,6 +105,20 @@ function M.apply()
   end
   -- sorted: table order changes between sessions, and this is part of the disk cache key
   M.signature = vim.json.encode(M.mermaid, { sort_keys = true })
+
+  -- D2: a base theme of the right lightness (200 is dark; the base picks the
+  -- syntax colors of code labels) under overrides for every theme color. N1
+  -- is text and N7 the background, N2-N6 the greys between; B are the main
+  -- strokes and fills, AA and AB the accent ones.
+  M.d2 = { themeID = dark and 200 or 0, themeOverrides = {
+    N1 = hex(fg), N2 = hex(blend(fg, bg, 0.72)), N3 = hex(blend(fg, bg, 0.5)), N4 = hex(border),
+    N5 = hex(blend(fg, bg, 0.14)), N6 = hex(blend(fg, bg, 0.07)), N7 = hex(bg),
+    B1 = hex(h[1]), B2 = hex(h[1]), B3 = hex(blend(h[1], bg, 0.35)), B4 = hex(blend(h[1], bg, 0.18)),
+    B5 = hex(blend(h[1], bg, 0.1)), B6 = hex(blend(h[1], bg, 0.05)),
+    AA2 = hex(h[2]), AA4 = hex(blend(h[2], bg, 0.18)), AA5 = hex(blend(h[2], bg, 0.08)),
+    AB4 = hex(blend(h[3], bg, 0.18)), AB5 = hex(blend(h[3], bg, 0.08)),
+  } }
+  M.d2_signature = vim.json.encode(M.d2, { sort_keys = true })
 end
 
 -- One highlight group combining `groups` in order, later ones winning.

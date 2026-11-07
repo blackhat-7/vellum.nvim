@@ -217,7 +217,8 @@ function R.fenced_code_block(node, width)
   local lang = info and text_of(info):match('^%s*([%w_+#.-]+)') -- "json,title=x" and "{r}" carry more than a language
   local body = child(node, 'code_fence_content')
   local text = body and text_of(body, node) or ''
-  if lang and lang:lower() == 'mermaid' and image.supported then return code.diagram(text, width, (node:start())) end
+  local diagram = lang and ({ mermaid = 'mermaid', d2 = 'd2' })[lang:lower()]
+  if diagram and image.supported then return code.diagram(text, width, (node:start()), diagram) end
   if lang and lang:lower() == 'math' then return inline.display(text, width, (node:start())) end
   return code.panel(text, lang, width)
 end

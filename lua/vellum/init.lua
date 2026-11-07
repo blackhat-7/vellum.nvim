@@ -24,12 +24,18 @@ local S = {} -- win, buf: the preview · src: the markdown buffer · rows, margi
 -- Highlights are applied only to lines being drawn, so a redraw costs the
 -- same for a 50-line and a 5,000-line document.
 api.nvim_set_decoration_provider(ns, {
-  on_win = function(_, _, buf) return buf == S.buf end,
+  on_win = function(_, _, buf)
+    if buf ~= S.buf then return false end
+    image.next_frame()
+  end,
   on_line = function(_, _, buf, row)
     for _, m in ipairs(S.rows[row + 1] or {}) do
       api.nvim_buf_set_extmark(buf, ns, row, m[1] + S.margin, {
         end_col = m[2] + S.margin, hl_group = m[3], priority = m[4], ephemeral = true,
       })
+      -- an image is sent to the terminal when a row of it is first drawn
+      local id = image.id_of(m[3])
+      if id then image.show(id) end
     end
   end,
 })

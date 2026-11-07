@@ -449,6 +449,19 @@ do
   image.grid(zoom_id, dir .. '/wide.png', 4, 2, 0, 0, 2, 4)
   image.keep(shown_by('![s](' .. dir .. '/small.png)'))
   check('an image no longer shown is freed; shown and zoom ones stay', dropped[wide] and not dropped[small_id] and not dropped[zoom_id], vim.inspect(dropped))
+  -- images are sent when first drawn, within a budget: drawing a third
+  -- 64 MB image frees the least recently drawn one that is off screen
+  dropped = {}
+  local big = {}
+  for i = 1, 3 do
+    big[i] = image.id(write_png(dir .. '/big' .. i .. '.png', 4000, 4000))
+    image.lines(dir .. '/big' .. i .. '.png', 10, 10)
+  end
+  for i = 1, 3 do
+    image.next_frame()
+    image.show(big[i])
+  end
+  check('over budget, the least recently drawn image is freed', dropped[big[1]] and not dropped[big[2]] and not dropped[big[3]], vim.inspect(dropped))
   image.drop, image.supported = drop, false
 end
 

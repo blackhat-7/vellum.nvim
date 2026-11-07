@@ -158,17 +158,13 @@ function M.id_of(group)
   return M.paths[id] and id
 end
 
--- Placeholder lines showing rows r0..r0+nr-1 and columns c0..c0+nc-1 (from 0)
--- of `path` placed in a cols x rows box as image `id`, as segment lines.
-function M.grid(id, path, cols, rows, r0, c0, nr, nc)
+-- Placeholder text for rows r0..r0+nr-1 and columns c0..c0+nc-1 (from 0)
+-- of image `id`, as segment lines. The terminal shows nothing until the
+-- image itself is sent (ensure).
+local function cells(id, path, r0, c0, nr, nc)
   local hl = 'VellumImg' .. id
   vim.api.nvim_set_hl(0, hl, { fg = id })
   M.paths[id] = path
-  local size = cols .. 'x' .. rows
-  if sent[id] ~= size then
-    if sent[id] then place(id, cols, rows) else transmit(id, cols, rows, path) end
-    sent[id] = size
-  end
   -- only a row's first cell names its row and column; kitty gives each
   -- bare cell after it the next column. Full marks on every cell more than
   -- doubled the bytes of every redraw, which lags over ssh.
@@ -180,19 +176,72 @@ function M.grid(id, path, cols, rows, r0, c0, nr, nc)
   return out
 end
 
-local owned = {} -- ids the preview placed (the zoom viewer keeps its own)
+-- Make the terminal hold image `id` placed in a cols x rows box.
+local function ensure(id, path, cols, rows)
+  local size = cols .. 'x' .. rows
+  if sent[id] == size then return end
+  if sent[id] then place(id, cols, rows) else transmit(id, cols, rows, path) end
+  sent[id] = size
+end
+
+-- The zoom viewer's lines: its image is sent at once.
+function M.grid(id, path, cols, rows, r0, c0, nr, nc)
+  ensure(id, path, cols, rows)
+  return cells(id, path, r0, c0, nr, nc)
+end
+
+-- The preview's images: sent when a row of theirs is first drawn (show),
+-- and freed when the document drops them (keep) or the budget needs room.
+-- Sending every image at render time filled the terminal's image memory
+-- (kitty: 320 MB) with pictures far off screen, and it evicted the oldest
+-- ones, so they showed as blank space.
+local BUDGET = 160e6 -- decoded bytes; leaves the zoom viewer room under kitty's 320 MB
+local owned = {} -- id → { path, cols, rows, bytes, frame last drawn }
+local frame = 0
 
 -- Placeholder lines showing `path` in a cols x rows box, as segment lines.
 function M.lines(path, cols, rows)
   local id = M.id(path)
-  owned[id] = true
-  return M.grid(id, path, cols, rows, 0, 0, rows, cols)
+  local o = owned[id] or { path = path }
+  if not o.bytes then
+    local pw, ph = M.png_size(path)
+    o.bytes = (pw or 0) * (ph or 0) * 4
+  end
+  o.cols, o.rows = cols, rows
+  owned[id] = o
+  return cells(id, path, 0, 0, rows, cols)
 end
 
--- Free the preview's images that `shown` (id → true) no longer has. Every
--- version of an edited diagram is a new image; kept, they fill the
--- terminal's image memory (kitty: 320 MB) and it evicts images still on
--- screen.
+-- A new redraw of the preview starts: images drawn in it count as on screen.
+function M.next_frame() frame = frame + 1 end
+
+-- A row of image `id` is being drawn: send it if the terminal lacks it,
+-- first freeing images not on screen, least recently drawn first.
+function M.show(id)
+  local o = owned[id]
+  if not o then return end
+  o.frame = frame
+  if sent[id] == o.cols .. 'x' .. o.rows then return end
+  if not sent[id] then
+    local total = o.bytes
+    for other, x in pairs(owned) do
+      if sent[other] then total = total + x.bytes end
+    end
+    while total > BUDGET do
+      local oldest
+      for other, x in pairs(owned) do
+        if sent[other] and x.frame ~= frame and (not oldest or x.frame < owned[oldest].frame) then oldest = other end
+      end
+      if not oldest then break end
+      total = total - owned[oldest].bytes
+      M.drop(oldest)
+    end
+  end
+  ensure(id, o.path, o.cols, o.rows)
+end
+
+-- Free the preview's images that `shown` (id → true) no longer has: every
+-- version of an edited diagram is a new image.
 function M.keep(shown)
   for id in pairs(owned) do
     if not shown[id] then

@@ -11,9 +11,18 @@ M.commands = {
 M.root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h')
 
 function M.run()
-  local cmd = 'cd ' .. vim.fn.shellescape(M.root .. '/render')
-  for _, c in ipairs(M.commands) do cmd = cmd .. ' && ' .. table.concat(c, ' ') end
-  vim.cmd('terminal ' .. cmd)
+  local dir = M.root .. '/render'
+  -- a package manager that builds the renderer (Nix) leaves it read-only,
+  -- where npm ci can only fail
+  if not vim.uv.fs_access(dir, 'W') then
+    vim.notify('vellum: ' .. dir .. ' is read-only: your package manager installed the renderer, so rebuild it there', vim.log.levels.ERROR)
+    return
+  end
+  local steps = vim.tbl_map(function(c) return table.concat(c, ' ') end, M.commands)
+  vim.cmd('botright new')
+  -- an argv, not :terminal {cmd}, which expands % and # in the path and runs
+  -- the user's 'shell' (fish, nushell) where `&&` may not exist
+  vim.fn.jobstart({ 'sh', '-c', table.concat(steps, ' && ') }, { term = true, cwd = dir })
 end
 
 return M

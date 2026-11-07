@@ -510,7 +510,26 @@ do
   local build = dofile('lua/vellum/build.lua')
   check('renderer build installs deps then the headless shell',
     build.commands[1][1] == 'npm' and build.commands[2][1] == 'npx'
-      and vim.fn.fnamemodify(build.root, ':t') == 'vellum.nvim', vim.inspect({ build.root, build.commands }))
+      and vim.uv.fs_stat(build.root .. '/render/package.json') ~= nil, vim.inspect({ build.root, build.commands }))
+  -- a root with % and # in it: :terminal {cmd} would have expanded them
+  local root = vim.fn.tempname() .. '/a%b#c'
+  vim.fn.mkdir(root .. '/render', 'p')
+  build.root = root
+  local jobstart, argv, opts = vim.fn.jobstart, nil, nil
+  vim.fn.jobstart = function(a, o) argv, opts = a, o; return 1 end
+  local wins = #vim.api.nvim_list_wins()
+  build.run()
+  check(':Vellum build runs both steps in render/, in a new window',
+    argv and argv[1] == 'sh' and argv[3] == 'npm ci && npx puppeteer browsers install chrome-headless-shell'
+      and opts.term and opts.cwd == root .. '/render' and #vim.api.nvim_list_wins() == wins + 1, vim.inspect({ argv, opts }))
+  vim.cmd('close')
+  -- a renderer built by a package manager (Nix) is read-only
+  vim.uv.fs_chmod(root .. '/render', tonumber('555', 8))
+  said, argv = nil, nil
+  build.run()
+  check(':Vellum build refuses a read-only renderer', said and said:find('read%-only') and argv == nil, said)
+  vim.uv.fs_chmod(root .. '/render', tonumber('755', 8))
+  vim.fn.jobstart = jobstart
   vim.notify = notify
 end
 

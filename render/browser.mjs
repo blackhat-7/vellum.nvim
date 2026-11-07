@@ -192,8 +192,7 @@ const d2diagram = async ({ d2: code, theme, dir, bin }) => {
 
 const picture = ({ image }) => {
   // local files go in as data URLs: an about:blank page may not read file://
-  const src = /^https?:\/\//.test(image) ? image
-    : dataUrl(image);
+  const src = /^https?:\/\//.test(image) ? image : dataUrl(image);
   return page.evaluate(async (src) => {
     const c = document.getElementById('c');
     c.innerHTML = '';

@@ -131,8 +131,13 @@ function M.parse(text, hl)
         formula(text:sub(cs + 1, ce), text:sub(ce + 1, ce + 1), hls)
       elseif t == 'inline_link' or t == 'full_reference_link' or t == 'collapsed_reference_link' then
         local label, dest, ref = child(c, 'link_text'), child(c, 'link_destination'), child(c, 'link_label')
-        local link = t == 'inline_link' and (dest and slice(dest):match('^<(.*)>$') or dest and slice(dest) or '')
-          or { ref = ref and slice(ref):sub(2, -2) or label and slice(label) or '' }
+        local link
+        if t == 'inline_link' then
+          local d = dest and slice(dest) or ''
+          link = d:match('^<(.*)>$') or d
+        else
+          link = { ref = ref and slice(ref):sub(2, -2) or label and slice(label) or '' }
+        end
         local first = #segs + 1
         if label then walk(label, with(hls, 'VellumLink')) end
         for k = first, #segs do segs[k].link = link end

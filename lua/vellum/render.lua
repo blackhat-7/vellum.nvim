@@ -286,7 +286,7 @@ function R.list(node, width)
   depth = depth + 1
   local items = kids(node)
   local marker = items[1] and items[1]:named_child(0)
-  local ordered = marker and marker:type():match('_dot$') or marker and marker:type():match('_parenthesis$')
+  local ordered = marker and (marker:type():match('_dot$') or marker:type():match('_parenthesis$'))
   local start = ordered and tonumber(text_of(marker):match('%d+')) or 1
   local mw = ordered and #tostring(start + #items - 1) + 2 or 2
   local lines, anchors = {}, {}

@@ -124,7 +124,8 @@ end
 
 -- One highlight group combining `groups` in order, later ones winning.
 function M.merge(groups)
-  if type(groups) == 'string' or #groups < 2 then return type(groups) == 'string' and groups or groups[1] end
+  if type(groups) == 'string' then return groups end
+  if #groups < 2 then return groups[1] end
   local name = 'Vellum_' .. table.concat(groups, '_'):gsub('Vellum', '')
   if not merged[name] then
     local attrs = {}

@@ -52,8 +52,9 @@ local function detect()
   local local_term = vim.env.KITTY_WINDOW_ID or vim.env.GHOSTTY_RESOURCES_DIR or env:find('kitty') or env:find('ghostty')
   local client = vim.env.TMUX and tmux({ 'display', '-p', '#{client_termtype}\t#{client_termfeatures}\t#{client_termname}' }) or ''
   local kind, features, name = unpack(vim.split(client, '\t'))
+  local attached = (kind or ''):lower()
   M.supported = vim.api.nvim_ui_send ~= nil
-    and (local_term or (kind or ''):lower():find('kitty') or (kind or ''):lower():find('ghostty')) ~= nil
+    and (local_term or attached:find('kitty') or attached:find('ghostty')) ~= nil
   tmux_problem = nil
   if not M.supported or not vim.env.TMUX then return end
   if features and not features:find('RGB') then

@@ -395,17 +395,22 @@ do
     and out[8] == '' and out[20] == '' and out[6] == '# Title' and out[13] == 'import x from "y"', vim.inspect(out))
 end
 
+-- PNG files for image checks; only their headers are read
+local function u32(n) return string.char(math.floor(n / 16777216) % 256, math.floor(n / 65536) % 256, math.floor(n / 256) % 256, n % 256) end
+local function phys(ppm, unit) return u32(9) .. 'pHYs' .. u32(ppm) .. u32(ppm) .. string.char(unit or 1) .. u32(0) end
+local function write_png(path, w, h, chunk) -- CRCs are zero: only the headers are read
+  local f = io.open(path, 'wb')
+  f:write('\137PNG\r\n\26\n' .. u32(13) .. 'IHDR' .. u32(w) .. u32(h) .. string.rep('\0', 5) .. u32(0) .. (chunk or '') .. u32(0) .. 'IEND' .. u32(0))
+  f:close()
+  return path
+end
+
 -- images: a small one stays centered at natural size, a very wide one
 -- shrinks to the width (overflowing, it showed only its empty left edge)
 do
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, 'p')
-  local function png(name, w, h) -- only the header is read for the size
-    local function u32(n) return string.char(math.floor(n / 16777216) % 256, math.floor(n / 65536) % 256, math.floor(n / 256) % 256, n % 256) end
-    local f = io.open(dir .. '/' .. name, 'wb')
-    f:write('\137PNG\r\n\26\n' .. u32(13) .. 'IHDR' .. u32(w) .. u32(h))
-    f:close()
-  end
+  local function png(name, w, h) write_png(dir .. '/' .. name, w, h) end
   png('wide.png', 9000, 600)
   png('small.png', 200, 100)
   png('badge.png', 80, 20)
@@ -446,14 +451,6 @@ end
 
 -- a rendered PNG's density (pixels per CSS px) comes from the pHYs chunk the
 -- renderer writes right after IHDR, in pixels per metre at 96 CSS px per inch
-local function u32(n) return string.char(math.floor(n / 16777216) % 256, math.floor(n / 65536) % 256, math.floor(n / 256) % 256, n % 256) end
-local function phys(ppm, unit) return u32(9) .. 'pHYs' .. u32(ppm) .. u32(ppm) .. string.char(unit or 1) .. u32(0) end
-local function write_png(path, w, h, chunk) -- CRCs are zero: only the headers are read
-  local f = io.open(path, 'wb')
-  f:write('\137PNG\r\n\26\n' .. u32(13) .. 'IHDR' .. u32(w) .. u32(h) .. string.rep('\0', 5) .. u32(0) .. (chunk or '') .. u32(0) .. 'IEND' .. u32(0))
-  f:close()
-  return path
-end
 do
   local function density(chunk) return select(3, image.png_size(write_png(vim.fn.tempname(), 10, 10, chunk))) end
   check('2x density from pHYs', density(phys(7559)) == 2, density(phys(7559)))

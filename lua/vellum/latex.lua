@@ -125,15 +125,17 @@ local function tokenize(s)
   return out
 end
 
+-- "−" leading or after one of these is a sign, not a subtraction
+local SIGN_AFTER = { bin = true, rel = true, open = true, punct = true, op = true }
+
 -- Atoms { text, class } → text, spaced as TeX spaces them; `tight` in scripts.
 local function join(atoms, tight)
   local out, prev = {}, nil
   for _, a in ipairs(atoms) do
     local c = a[2]
-    -- "−" leading or after an operator is a sign, not a subtraction
-    if c == 'bin' and (not prev or prev == 'bin' or prev == 'rel' or prev == 'open' or prev == 'punct' or prev == 'op') then c = 'ord' end
-    local gap = c == 'rel' or c == 'bin' or c == 'op' and prev ~= 'open'
-      or prev == 'rel' or prev == 'bin' or prev == 'punct' or prev == 'op' and c == 'ord'
+    if c == 'bin' and (not prev or SIGN_AFTER[prev]) then c = 'ord' end
+    local gap = c == 'rel' or c == 'bin' or (c == 'op' and prev ~= 'open')
+      or prev == 'rel' or prev == 'bin' or prev == 'punct' or (prev == 'op' and c == 'ord')
     if gap and not tight and prev and prev ~= 'space' and c ~= 'space' and c ~= 'close' and c ~= 'punct' then
       out[#out + 1] = ' '
     end

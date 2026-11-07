@@ -13,6 +13,7 @@ local strwidth = vim.api.nvim_strwidth
 local M = {}
 
 local src = {}
+local is_mdx = false -- the rendered buffer is MDX (see mdx.lua)
 local cache, used = {}, {} -- rendered blocks by (type, width, depth, source text)
 local depth = 0 -- list nesting, picks the bullet glyph
 
@@ -140,7 +141,15 @@ function render_block(node, width)
   return lines, anchors
 end
 
-function R.document(node, width) return blocks(kids(node), width, (node:start())) end
+-- The blocks of the document or of a heading's section. MDX statements and
+-- comments vanish here, like HTML comments, so rows and anchors stay put.
+local function content(node)
+  local out = kids(node)
+  if is_mdx then out = vim.tbl_filter(function(n) return not mdx.hidden(n, src) end, out) end
+  return out
+end
+
+function R.document(node, width) return blocks(content(node), width, (node:start())) end
 R.section = R.document
 
 local function heading(level, text, width)
@@ -436,14 +445,13 @@ function R.fallback(node, width) return inline.wrap({ { text_of(node, node), { '
 -- per-row marks { col, end_col, group, priority } (columns exclude the left
 -- margin), the margin width, and anchors for scroll sync.
 function M.render(buf, win_width, max_width)
-  local stripped
-  src, stripped = mdx.lines(buf)
+  src = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  is_mdx = mdx.is(buf)
   media.dir = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':p:h')
   local width = math.max(20, math.min(win_width - 4, max_width))
   local margin = string.rep(' ', math.max(0, math.floor((win_width - width) / 2)))
   depth = 0
-  local parser = stripped and ts.get_string_parser(table.concat(src, '\n'), 'markdown') or ts.get_parser(buf, 'markdown')
-  local root = parser:parse()[1]:root()
+  local root = ts.get_parser(buf, 'markdown'):parse()[1]:root()
   if root:has_error() then
     -- tree-sitter-markdown gives up on table rows with an empty cell written
     -- "||", or with every cell empty ("|  |  |"), dropping rows GitHub shows.
@@ -465,7 +473,7 @@ function M.render(buf, win_width, max_width)
     end
     if fixed then root = ts.get_string_parser(table.concat(src, '\n'), 'markdown'):parse()[1]:root() end
   end
-  local body, anchors = blocks(kids(root), width, 0)
+  local body, anchors = blocks(content(root), width, 0)
   cache, used = used, {}
   local text, rows = { '' }, { {} } -- a blank first line for breathing room
   for i, line in ipairs(body) do

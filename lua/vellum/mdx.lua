@@ -11,35 +11,43 @@ function M.markdown(buf)
   return vim.list_contains(fts, 'markdown') or vim.list_contains(fts, 'mdx')
 end
 
--- The lines of `buf`, with MDX statements and comments blanked in an .mdx
--- buffer. Blanking keeps every row where it was, so scroll sync still maps
--- source rows to preview rows. The second result says whether any changed.
+-- Neovim does not detect .mdx, so the name counts as well as the filetype.
+function M.is(buf)
+  return vim.api.nvim_buf_get_name(buf):lower():match('%.mdx$') ~= nil or vim.list_contains(filetypes(buf), 'mdx')
+end
+
+-- Whether `node`, a block of the document or of a heading's section, is an
+-- MDX statement or comment. MDX allows both only there, and markdown parses
+-- them as paragraphs. Runs per top-level block on every keystroke, so the
+-- first line is checked before the block's text is joined.
+function M.hidden(node, lines)
+  if node:type() ~= 'paragraph' then return false end
+  local sr, _, er, ec = node:range()
+  local first = lines[sr + 1] or ''
+  if first:match('^import[%s{*]') or first:match('^export%s') then return true end
+  if not first:match('^%s*{/%*') then return false end
+  if ec == 0 then er = er - 1 end
+  return vim.trim(table.concat(lines, '\n', sr + 1, er + 1)):match('^{/%*.*%*/}$') ~= nil
+end
+
+-- The lines of `buf`, with MDX statements and comments blanked, for export.
+-- Blanking rather than removing keeps the rows of everything else.
 function M.lines(buf)
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  -- Neovim does not detect .mdx, so the name counts as well as the filetype
-  if not (vim.api.nvim_buf_get_name(buf):lower():match('%.mdx$') or vim.list_contains(filetypes(buf), 'mdx')) then
-    return lines, false
-  end
-  local changed = false
-  -- MDX allows both only as top-level blocks, which markdown parses as
-  -- paragraphs of the document or of a heading's section
+  if not M.is(buf) then return lines end
   local function walk(node)
     for n in node:iter_children() do
       if n:type() == 'section' then
         walk(n)
-      elseif n:type() == 'paragraph' then
+      elseif M.hidden(n, lines) then
         local sr, _, er, ec = n:range()
         if ec == 0 then er = er - 1 end
-        local text = table.concat(lines, '\n', sr + 1, er + 1)
-        if text:match('^import[%s{*]') or text:match('^export%s') or vim.trim(text):match('^{/%*.*%*/}$') then
-          for r = sr + 1, er + 1 do lines[r] = '' end
-          changed = true
-        end
+        for r = sr + 1, er + 1 do lines[r] = '' end
       end
     end
   end
   walk(vim.treesitter.get_parser(buf, 'markdown'):parse()[1]:root())
-  return lines, changed
+  return lines
 end
 
 return M

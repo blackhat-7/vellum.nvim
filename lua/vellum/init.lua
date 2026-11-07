@@ -305,7 +305,7 @@ function M.export(path)
     return vim.notify('vellum: export to a .pdf or .html file, e.g. :Vellum export notes.pdf', vim.log.levels.ERROR)
   end
   vim.notify('vellum: exporting to ' .. path .. ' …')
-  local text = table.concat((mdx.lines(buf)), '\n')
+  local text = table.concat(mdx.lines(buf), '\n')
   local dir = name ~= '' and vim.fs.dirname(vim.fn.fnamemodify(name, ':p')) or vim.fn.getcwd()
   local kinds = {} -- callout type → its color, as in the preview
   for kind, a in pairs(render.alerts) do kinds[kind:lower()] = a[2]:lower() end

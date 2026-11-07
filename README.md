@@ -92,9 +92,22 @@ Options (the defaults):
 
 ```lua
 require('vellum').setup({
-  max_width = 100, -- widest text column in the preview
-  max_pixels = nil, -- most pixels in one rendered diagram, math or non-PNG image; nil for no cap
-  tab = false,     -- true: the preview opens in its own tab, and :Vellum switches to it
+  max_width = 100,   -- widest text column in the preview
+  max_pixels = nil,  -- most pixels in one rendered diagram, math or non-PNG image; nil for no cap
+  tab = false,       -- true: the preview opens in its own tab, and :Vellum switches to it
+  split = 'right',   -- where the preview splits off: 'right', 'left', 'above' or 'below'
+  size = nil,        -- its width (left/right) or height (above/below) in cells; nil: half
+  auto_open = false, -- true: open the preview when a markdown file shows in a window
+})
+```
+
+A misspelled or mistyped option is skipped with a warning.
+
+The preview's colors are highlight groups named `Vellum*` (`:filter /^Vellum/ hi` lists them), derived from your colorscheme. Your own definitions win; set them in a `ColorScheme` autocmd so they survive a colorscheme change:
+
+```lua
+vim.api.nvim_create_autocmd('ColorScheme', {
+  callback = function() vim.api.nvim_set_hl(0, 'VellumH1', { fg = '#ff9e64', bold = true }) end,
 })
 ```
 

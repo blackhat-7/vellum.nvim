@@ -11,7 +11,10 @@ local mdx = require('vellum.mdx')
 local api = vim.api
 local M = {}
 
-M.config = { max_width = 100, tab = false }
+M.config = { max_width = 100, tab = false, split = 'right', auto_open = false }
+-- every option and its type; max_pixels and size default to nil
+local OPTIONS = { max_width = 'number', max_pixels = 'number', tab = 'boolean', split = 'string', size = 'number', auto_open = 'boolean' }
+local SPLITS = { right = true, left = true, above = true, below = true }
 
 local ns = api.nvim_create_namespace('vellum')
 local group = api.nvim_create_augroup('vellum', { clear = true })
@@ -133,9 +136,36 @@ local function resized()
 end
 M.redraw = draw
 
+-- A mistyped or misspelled option is skipped with a warning; it would
+-- otherwise do nothing without a word.
 function M.setup(opts)
-  M.config = vim.tbl_extend('force', M.config, opts or {})
+  local bad = {}
+  for k, v in pairs(opts or {}) do
+    local want = OPTIONS[k]
+    if not want then
+      bad[#bad + 1] = ('unknown option %q'):format(k)
+    elseif type(v) ~= want then
+      bad[#bad + 1] = ('%s should be a %s, not %s'):format(k, want, type(v))
+    elseif k == 'split' and not SPLITS[v] then
+      bad[#bad + 1] = ('split should be right, left, above or below, not %q'):format(v)
+    elseif k == 'size' and (v < 1 or v % 1 ~= 0) then
+      bad[#bad + 1] = ('size should be a whole number of columns or rows, not %s'):format(v)
+    else
+      M.config[k] = v
+    end
+  end
+  if #bad > 0 then vim.notify('vellum: ' .. table.concat(bad, '; '), vim.log.levels.WARN) end
   browser.max_pixels = M.config.max_pixels
+  api.nvim_create_augroup('vellum_auto', { clear = true })
+  if M.config.auto_open then
+    -- markdown in a real file window: hover popups and picker previews are markdown too
+    api.nvim_create_autocmd('BufWinEnter', { group = 'vellum_auto', callback = function(ev)
+      if valid() or vim.bo[ev.buf].buftype ~= '' or not mdx.markdown(ev.buf) then return end
+      vim.schedule(function()
+        if not valid() and api.nvim_get_current_buf() == ev.buf and api.nvim_win_get_config(0).relative == '' then M.open() end
+      end)
+    end })
+  end
 end
 
 function M.open()
@@ -154,7 +184,10 @@ function M.open()
     -- `tab = true` asks to see the preview, so :Vellum jumps to its tab; gT brings the source back
     api.nvim_set_current_win(S.win)
   else
-    S.win = api.nvim_open_win(S.buf, false, { split = 'right', win = from })
+    local side = M.config.split == 'left' or M.config.split == 'right'
+    S.win = api.nvim_open_win(S.buf, false, {
+      split = M.config.split, win = from, width = side and M.config.size or nil, height = not side and M.config.size or nil,
+    })
   end
   local wo = vim.wo[S.win][0]
   wo.number, wo.relativenumber, wo.signcolumn, wo.foldcolumn, wo.statuscolumn = false, false, 'no', '0', ''
@@ -210,11 +243,14 @@ function M.open()
       update()
     end
   end)
-  au('ColorScheme', function()
+  -- after every other ColorScheme handler, so a user's own Vellum* colors set
+  -- there are in place before merged groups copy them
+  au('ColorScheme', vim.schedule_wrap(function()
+    if not valid() then return end
     theme.apply()
     render.reset()
     update()
-  end)
+  end))
   -- a re-attached tmux session may sit in a new terminal that lost the images
   au('FocusGained', function()
     image.reset()

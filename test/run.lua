@@ -782,5 +782,74 @@ do
   vellum.setup({ tab = false })
 end
 
+-- setup: bad options are skipped with a warning; split and size place the
+-- preview; auto_open opens it on markdown in a file window; users' own
+-- Vellum* colors win over the derived ones
+do
+  local vellum = require('vellum')
+  local notify, said = vim.notify, nil
+  vim.notify = function(m) said = m end
+  vellum.setup({ max_widht = 80, tab = 'yes', split = 'top', size = 0.5, max_width = 90 })
+  check('setup names every bad option', said and said:find('max_widht') and said:find('tab should be a boolean')
+    and said:find('split should be') and said:find('size should be'), said)
+  check('setup keeps good options and defaults for bad ones', vellum.config.max_width == 90 and vellum.config.tab == false
+    and vellum.config.split == 'right' and vellum.config.size == nil, vim.inspect(vellum.config))
+  said = nil
+  vellum.setup({ max_width = 100 })
+  check('good options say nothing', said == nil, said)
+  vim.notify = notify
+
+  vim.cmd('silent! only | enew!')
+  local src = vim.api.nvim_get_current_win()
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { '# Split' })
+  vim.bo.filetype = 'markdown'
+  vellum.setup({ split = 'left', size = 30 })
+  vellum.open()
+  local pwin = vim.fn.bufwinid('vellum://preview')
+  local pcol, scol = vim.api.nvim_win_get_position(pwin)[2], vim.api.nvim_win_get_position(src)[2]
+  check('split = left, size = 30', pwin > 0 and pcol < scol and vim.api.nvim_win_get_width(pwin) == 30,
+    vim.inspect({ pcol, scol, pwin > 0 and vim.api.nvim_win_get_width(pwin) }))
+  vellum.close()
+  vellum.setup({ split = 'below', size = 8 })
+  vellum.open()
+  pwin = vim.fn.bufwinid('vellum://preview')
+  check('split = below, size = 8', pwin > 0 and vim.api.nvim_win_get_position(pwin)[1] > vim.api.nvim_win_get_position(src)[1]
+    and vim.api.nvim_win_get_height(pwin) == 8)
+  vellum.close()
+
+  vim.api.nvim_set_hl(0, 'VellumH1', { fg = '#ff0000' })
+  vellum.open()
+  check("a user's Vellum* color survives opening", vim.api.nvim_get_hl(0, { name = 'VellumH1' }).fg == 0xff0000)
+  vellum.close()
+  local au = vim.api.nvim_create_autocmd('ColorScheme', { callback = function() vim.api.nvim_set_hl(0, 'VellumH1', { fg = '#00ff00' }) end })
+  vellum.open()
+  vim.cmd('colorscheme default')
+  vim.wait(50)
+  check("a user's Vellum* color set on ColorScheme survives a colorscheme change", vim.api.nvim_get_hl(0, { name = 'VellumH1' }).fg == 0x00ff00)
+  vellum.close()
+  vim.api.nvim_del_autocmd(au)
+  vim.cmd('colorscheme default')
+  vim.wait(50)
+  check('without one, the derived color comes back', vim.api.nvim_get_hl(0, { name = 'VellumH1' }).fg ~= 0x00ff00)
+
+  vellum.setup({ split = 'right', auto_open = true })
+  local scratch = vim.api.nvim_create_buf(false, true)
+  vim.bo[scratch].filetype = 'markdown'
+  vim.api.nvim_set_current_buf(scratch) -- like a hover or picker preview: markdown, but not a file
+  vim.wait(50)
+  check('auto_open skips markdown that is not a file', vim.fn.bufwinid('vellum://preview') == -1)
+  local file = vim.fn.tempname() .. '.md'
+  vim.fn.writefile({ '# Auto' }, file)
+  vim.cmd.edit(file)
+  vim.wait(50)
+  check('auto_open opens on a markdown file', vim.fn.bufwinid('vellum://preview') > 0)
+  vellum.close()
+  vellum.setup({ auto_open = false })
+  vim.cmd('enew')
+  vim.cmd.edit(file)
+  vim.wait(50)
+  check('auto_open off: nothing opens', vim.fn.bufwinid('vellum://preview') == -1)
+end
+
 print(('%d checks, %d failed'):format(count, failed))
 vim.cmd(failed == 0 and 'qa!' or 'cq!')

@@ -39,7 +39,9 @@ function M.apply()
   local muted = get('Comment', 'fg') or blend(fg, bg, 0.5)
   local border = blend(fg, bg, 0.22)
   local ok, info, warn, err = pick('DiagnosticOk', 'String'), pick('DiagnosticInfo'), pick('DiagnosticWarn'), pick('DiagnosticError')
-  local set = function(name, v) vim.api.nvim_set_hl(0, 'Vellum' .. name, v) end
+  -- default: a user's own `:hi VellumH1 ...` wins. :colorscheme clears every
+  -- group first, so these still follow a new colorscheme
+  local set = function(name, v) vim.api.nvim_set_hl(0, 'Vellum' .. name, vim.tbl_extend('force', v, { default = true })) end
 
   for i, c in ipairs(h) do set('H' .. i, { fg = c, bold = i < 6, italic = i >= 5 }) end
   set('H1Band', { fg = h[1], bg = blend(h[1], bg, 0.16), bold = true })

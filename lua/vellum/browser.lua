@@ -43,6 +43,9 @@ function M.start()
   vim.fn.mkdir(dir, 'p')
   local partial, stderr, answered = '', '', false
   local ok, proc = pcall(vim.system, { 'node', root .. '/browser.mjs' }, {
+    -- puppeteer reads its config (.puppeteerrc.*) from the working directory:
+    -- a packager's render/.puppeteerrc.json applies, a user's project one does not
+    cwd = root,
     stdin = true,
     stdout = function(_, data)
       partial = partial .. (data or '')

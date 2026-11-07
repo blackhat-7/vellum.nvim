@@ -46,6 +46,13 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 lazy runs `build.lua` on install. It installs the diagram renderer: `npm ci` and a small headless Chrome download.
 
+With Nix, the flake's `packages.<system>.plugin` comes with the renderer and a browser built in (Linux and Apple Silicon Macs). Node must be on your `PATH`. For [nixvim](https://github.com/nix-community/nixvim), the module adds both:
+
+```nix
+imports = [ inputs.vellum.nixvimModules.default ];
+keymaps = [ { mode = "n"; key = "<leader>mp"; action = "<cmd>Vellum<cr>"; } ];
+```
+
 If diagrams don't show, run `:checkhealth vellum`. It checks Node, renders a test diagram, and says what your terminal or tmux setup is missing.
 
 ## Use

@@ -6,9 +6,9 @@ Working plugin, public at github.com/blackhat-7/vellum.nvim, released as v0.2.0.
 
 Math: inline `$…$` becomes Unicode text (`latex.lua`); `$$…$$` and ```` ```math ```` become KaTeX pictures through the same headless browser as mermaid, with the text form while rendering or without kitty graphics. `$5 and $10` stays text.
 
-Rendering is split by job: `render.lua` (blocks), `inline.lua` (inline text, wrap), `code.lua` (code panels, diagrams), `media.lua` (images), `latex.lua` (math). The renderer starts on `:Vellum`; the PNG cache is capped at 100 MB.
+Rendering is split by job: `render.lua` (blocks), `inline.lua` (inline text, wrap), `code.lua` (code panels, diagrams), `media.lua` (images), `latex.lua` (math). The renderer starts on `:Vellum`, in `render/`; the PNG cache is capped at 100 MB. Nix: `flake.nix` + `nix/package.nix` build the plugin with `node_modules` and a browser (nixpkgs chromium on Linux, a pinned Chrome for Testing headless shell on aarch64-darwin), named in `render/.puppeteerrc.cjs`. Checked on aarch64-darwin and aarch64-linux (Docker).
 
-Resizing the pane stays smooth. The renderer restarts after a crash. `nvim --clean -l test/run.lua`: 150 checks green.
+Resizing the pane stays smooth. The renderer restarts after a crash. `nvim --clean -l test/run.lua`: 153 checks green.
 
 ## What's next
 
@@ -20,6 +20,7 @@ Candidates: vimdoc + CI; WezTerm once its placeholder PR (wezterm#7924) ships; G
 - **Footnote definitions are not a tree-sitter node.** Multi-word ones parse as paragraphs, one-word ones as `link_reference_definition`; both paths call `footnotes()`.
 - **`node:start()` returns three values.** As a last call argument they spill into later parameters; wrap in parens.
 - **The inline parser has anonymous punctuation children** (`/`, `:`). Walk only named nodes, or text reaches `push` in fragments.
+- **Puppeteer never downloads a browser at launch**; it throws `Could not find chrome-headless-shell`. Its config is read from the cwd, so `browser.lua` starts it in `render/`. Bumping puppeteer? Update the macOS headless shell `version` and `hash` in `nix/package.nix` to match.
 - **npm may block puppeteer's postinstall** (`allowScripts`), so `build.lua` downloads the headless shell explicitly.
 - **tmux needs `set -g allow-passthrough on`** for kitty graphics, and RGB in `terminal-features` for the attached TERM. Over ssh, `COLORTERM` is not forwarded, so tmux does not guess RGB.
 - **Screenshot harness can mimic ssh:** kitty `-o term=xterm-256color` and `env -u COLORTERM` before tmux.

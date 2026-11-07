@@ -6,42 +6,36 @@
   outputs =
     { self, nixpkgs }:
     let
+      inherit (nixpkgs) lib;
       # no x86_64-darwin: nixpkgs no longer evaluates it
       systems = [
         "x86_64-linux"
         "aarch64-linux"
         "aarch64-darwin"
       ];
-      forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+      forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
 
-      vellum = pkgs: import ./nix/package.nix {
-        inherit (pkgs) lib stdenvNoCC vimUtils nodejs importNpmLock;
-        src = self;
-      };
+      # only what the plugin reads at runtime; docs/ alone is several MB
+      src = lib.sourceByRegex self [
+        "LICENSE"
+        "lua(/.*)?"
+        "plugin(/.*)?"
+        "render(/.*)?"
+      ];
+      vellum = pkgs: pkgs.callPackage ./nix/package.nix { inherit src; };
     in
     {
-      packages = forAllSystems (pkgs: {
-        default = (vellum pkgs).plugin;
-        inherit ((vellum pkgs)) plugin;
+      packages = forAllSystems (pkgs: rec {
+        plugin = vellum pkgs;
+        default = plugin;
       });
 
       # for nixvim: `imports = [ inputs.vellum.nixvimModules.default ]`
       nixvimModules.default =
         { pkgs, ... }:
         {
-          extraPlugins = [ (vellum pkgs).plugin ];
+          extraPlugins = [ (vellum pkgs) ];
           extraPackages = [ pkgs.nodejs ];
-          keymaps = [
-            {
-              mode = "n";
-              key = "<leader>mp";
-              action = "<cmd>Vellum<cr>";
-              options = {
-                silent = true;
-                desc = "Markdown preview";
-              };
-            }
-          ];
         };
     };
 }

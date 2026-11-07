@@ -2,17 +2,15 @@
 
 ## Where things stand
 
-Working plugin, public at github.com/blackhat-7/vellum.nvim, released as v0.2.0. `:Vellum` opens the preview (`setup({ tab = true })`: its own tab, which `:Vellum` switches to; Tab/gt/S-Tab move tab pages in its two windows, and images re-place when the tab comes back); it re-renders on every edit and follows the cursor; scrolling the preview scrolls the source. `<CR>` on an image in the preview opens it full-screen (`zoom.lua`); `gx`/`<CR>` on a link follows it (`links.lua`). `:Vellum build` opens a terminal and installs the renderer (npm + headless Chrome). `:Vellum export` writes PDF or HTML (renderer + `marked`). `:checkhealth vellum` (`health.lua`) renders a test diagram and says why images can't show. Obsidian callouts, `==highlight==` and `[[wikilinks]]` render. Keystroke cost: 0.23 ms for a README, ~6.8 ms median at 5,000 lines (`test/perf.lua`). Rendered: headings, paragraphs with bold/italic/strike/code/links/bare URLs/escapes/entities, lists, quotes, GitHub alerts, footnotes, tables, code with syntax colors, front matter, HTML blocks, `<details>` summaries (`▾`), images (block, or inline one row high for badges), mermaid diagrams, math.
+Public at github.com/blackhat-7/vellum.nvim, last release v0.3.0; `main` has unreleased work (below). `:Vellum` opens the preview (or its own tab with `setup({ tab = true })`); it re-renders on every edit, follows the cursor, and scrolling it scrolls the source. `<CR>` on an image zooms it (`zoom.lua`); `gx`/`<CR>` follows links (`links.lua`). `:Vellum export` writes PDF or HTML. `:Vellum build` installs the renderer for any plugin manager (`build.lua`; refuses a read-only Nix install). `:checkhealth vellum` renders a mermaid and a D2 test diagram. Keystroke cost ~7 ms median at 5,000 lines (`test/perf.lua`), same for `.mdx`.
 
-Math: inline `$…$` becomes Unicode text (`latex.lua`); `$$…$$` and ```` ```math ```` become KaTeX pictures through the same headless browser as mermaid, with the text form while rendering or without kitty graphics. `$5 and $10` stays text.
+Unreleased on `main`: `:Vellum build` (#3), MDX (#4), `max_pixels` (joaoptpsa), D2 (issue #2). D2 compiles in node (`@terrastruct/d2`, WebAssembly, loaded on the first D2 block) and is shot by the same Chrome as mermaid; colors from the colorscheme; local and URL icons; export too. `test/d2.md` holds showcase-sized D2 diagrams for visual checks.
 
-Rendering is split by job: `render.lua` (blocks), `inline.lua` (inline text, wrap), `code.lua` (code panels, diagrams), `media.lua` (images), `latex.lua` (math). The renderer starts on `:Vellum`, in `render/`; the PNG cache is capped at 100 MB. Nix: `flake.nix` + `nix/package.nix` build the plugin with `node_modules` and a browser (nixpkgs chromium on Linux, a pinned Chrome for Testing headless shell on aarch64-darwin), named in `render/.puppeteerrc.cjs`. Checked on aarch64-darwin and aarch64-linux (Docker).
-
-Resizing the pane stays smooth. The renderer restarts after a crash. MDX buffers (`.mdx`, filetype `mdx` or `markdown.mdx`) preview, export and follow like markdown (`mdx.lua`). `nvim --clean -l test/run.lua`: 154 checks green.
+Rendering is split by job: `render.lua` (blocks), `inline.lua` (inline text, wrap), `code.lua` (code panels, diagrams), `media.lua` (images), `latex.lua` (math), `mdx.lua` (MDX). The renderer starts on `:Vellum`, in `render/`; the PNG cache is capped at 100 MB. Nix: `flake.nix` + `nix/package.nix`, with a browser (chromium on Linux, a pinned headless shell on aarch64-darwin); checked on aarch64-darwin, aarch64-linux and x86_64-linux. `nvim --clean -l test/run.lua`: 184 checks green.
 
 ## What's next
 
-Candidates: vimdoc + CI; WezTerm once its placeholder PR (wezterm#7924) ships; Graphviz via viz.js.
+Release the unreleased work. Candidates: vimdoc + CI; WezTerm once wezterm#7924 ships; Graphviz via viz.js.
 
 ## Gotchas
 
@@ -23,15 +21,11 @@ Candidates: vimdoc + CI; WezTerm once its placeholder PR (wezterm#7924) ships; G
 - **Puppeteer never downloads a browser at launch**; it throws `Could not find chrome-headless-shell`. Its config is read from the cwd, so `browser.lua` starts it in `render/`. Bumping puppeteer? Update the macOS headless shell `version` and `hash` in `nix/package.nix` to match.
 - **npm may block puppeteer's postinstall** (`allowScripts`), so `build.lua` downloads the headless shell explicitly.
 - **tmux needs `set -g allow-passthrough on`** for kitty graphics, and RGB in `terminal-features` for the attached TERM. Over ssh, `COLORTERM` is not forwarded, so tmux does not guess RGB.
-- **Screenshot harness can mimic ssh:** kitty `-o term=xterm-256color` and `env -u COLORTERM` before tmux.
 - **Kitty placeholders need `termguicolors`**: the image id is the fg color.
-- **Harness: start nvim after kitty attaches to tmux.** Before a client attaches, tmux reports no RGB and images are disabled.
 - **Screenshot checks:** a headless Hyprland output (`hyprctl output create headless`) plus `grim -o` captures kitty without covering the real screen. Launch kitty with `-o confirm_os_window_close=0`.
 - **`vim.fn.tempname()` + `XDG_CACHE_HOME`:** `test/run.lua` sets a private cache before requiring the plugin, because `browser.lua` prunes the cache on load.
-- **Recording video:** `wf-recorder` is broken here (libavutil). Pipe `grim -g <window> -t ppm -` in a loop into `ffmpeg -f image2pipe -use_wallclock_as_timestamps 1`; drive nvim with `tmux send-keys`.
 - **Tree-sitter's `latex_block` swallows markup:** `$5 [a](b) $10` is one node; `inline.lua` re-parses after a rejected `$`. Markup spanning the second `$` (`**$10**`) still shows raw.
 - **Renderer page must stay in standards mode** (`<!DOCTYPE html>`) for KaTeX; mermaid SVGs are `display:block` there to keep diagram sizes unchanged.
-- **Measuring redraw cost:** the UI is its own `nvim` process (the server is `nvim --embed`); its `/proc/<pid>/io` `wchar` is bytes sent to the terminal. `pgrep -f` also matches the tmux/shell wrappers.
 - **README shots come from `docs/demo.md`; the demo video from `docs/showcase.md`.** Launch kitty with `-o background_image=none -o background_opacity=1 -o cursor_trail=0` (transparent schemes show the wallpaper; the cursor trail draws wedges in video). The compositor pointer lands on the headless output; patch it out.
 - **`WinScrolled` fires in the current window for any window that scrolled** (a mouse wheel over the preview). Check `v:event` for the window. `nvim -l` never fires it; test under `-c luafile` with `vim.defer_fn`.
 - **Two-way scroll sync loops unless each side ignores its own echo:** `sync` records `S.top`, `follow` records `S.view`. The preview needs `scrolloff=0`, or it shifts the topline `sync` set.
@@ -39,3 +33,5 @@ Candidates: vimdoc + CI; WezTerm once its placeholder PR (wezterm#7924) ships; G
 - **Kitty ignores the source rectangle (`x,y,w,h`) on placeholder placements.** The zoom viewer crops by naming cells instead, so zoom stops where the image reaches 297 cells on a side.
 - **tmux can drop a kitty placement command under a burst of redraws** (fast wheel zoom). The text is right but the picture keeps an old size. The zoom viewer re-sends its placement 100 ms after the last event.
 - **herdr drops kitty images above about 5.9 MP without a word.** `max_pixels = 5.5e6` lowers big renders' scale under it. Chrome's screenshots carry no pHYs; the renderer adds one with the scale, read by `image.png_density()`.
+- **Hyprland 0.56 takes Lua:** `hyprctl eval "hl.window_rule({ match = { class = 'x' }, workspace = 'name:t silent' })"`, `hyprctl dispatch "hl.dsp.window.move({ workspace = '11', window = 'address:…', follow = false })"`; `keyword` is refused. A headless output shows only its active workspace.
+- **D2 lays text out with exact glyph widths;** Chrome on Linux rounds them unless `--font-render-hinting=none`. Compare PNG sizes across machines to catch it.

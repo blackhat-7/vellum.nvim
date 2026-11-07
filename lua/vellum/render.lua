@@ -124,8 +124,9 @@ end
 function render_block(node, width)
   local t = node:type()
   local fn = R[t] or R.fallback
-  if t == 'section' or t == 'document' then return fn(node, width) end
-  local key = table.concat({ t, width, depth, text_of(node) }, '\0')
+  if t == 'document' then return fn(node, width) end
+  -- a section of an .mdx file hides MDX lines (content), so MDX is part of the key
+  local key = table.concat({ t, width, depth, is_mdx and 'mdx' or '', text_of(node) }, '\0')
   local hit = used[key] or cache[key]
   if hit then
     used[key] = hit

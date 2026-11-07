@@ -377,15 +377,19 @@ do
   check('mdx rows stay put', anchors[1] and anchors[1][1] == 5, vim.inspect(anchors[1]))
   has = shows('.md')
   check('markdown shows the same text', has('Chart') and has('hidden note'))
-  -- hiding happens before the block cache: an .md after an .mdx still shows
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(buf, vim.fn.tempname() .. '.mdx')
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(text, '\n'))
-  render.render(buf, 84, 100)
-  local md = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(md, vim.fn.tempname() .. '.md')
-  vim.api.nvim_buf_set_lines(md, 0, -1, false, vim.split(text, '\n'))
-  check('mdx hiding is not cached into markdown', find((render.render(md, 84, 100)), 'Chart') ~= nil)
+  -- hiding is part of the block cache key: an .md after an .mdx still shows
+  -- what the .mdx hid, top-level and inside a cached heading section
+  local function named(name, lines)
+    local b = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_name(b, vim.fn.tempname() .. name)
+    vim.api.nvim_buf_set_lines(b, 0, -1, false, lines)
+    return b
+  end
+  local plain = { 'import { Chart } from "./chart"', '', '# Title', '', 'para', '', '## Sub', '', 'export default Layout' }
+  render.render(named('.mdx', plain), 84, 100)
+  local md_lines = render.render(named('.md', plain), 84, 100)
+  check('mdx hiding is not cached into markdown', find(md_lines, 'Chart') ~= nil and find(md_lines, 'Layout') ~= nil)
+  local buf = named('.mdx', vim.split(text, '\n'))
   local out = require('vellum.mdx').lines(buf)
   check('mdx export blanks statements and comments in place', #out == 20 and out[1] == '' and out[4] == ''
     and out[8] == '' and out[20] == '' and out[6] == '# Title' and out[13] == 'import x from "y"', vim.inspect(out))

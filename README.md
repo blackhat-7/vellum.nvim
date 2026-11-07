@@ -1,39 +1,42 @@
 # vellum.nvim
 
-A markdown preview for Neovim. It renders in a split beside your buffer, inside the terminal. GitHub-flavored markdown, with mermaid and D2 diagrams and display math as real images.
+A live markdown preview inside Neovim. It opens beside your buffer, in the terminal, and draws mermaid and D2 diagrams and math as real images.
 
-![Demo on docs/showcase.md: open the preview, edit a label in a large architecture diagram, zoom and pan it, scroll the preview with the mouse through KaTeX math and a saga sequence diagram, a state machine, resize the split](docs/demo.webp)
+![Demo: open the preview, edit a label in a mermaid diagram and watch it redraw, zoom and pan it, edit a D2 platform map, then move through KaTeX math, a sequence diagram and a state machine while the preview follows. Kanagawa Dragon colorscheme.](docs/demo.webp)
 
-- **Live.** Every keystroke re-renders. Unchanged blocks come from a cache, so long documents stay fast.
-- **Scroll sync, both ways.** The preview follows your cursor. Scrolling the preview scrolls the source.
-- **Diagrams.** Mermaid and D2 render in a headless Chrome and show as images, sized to your terminal font. Each one renders once and is cached on disk (capped at 100 MB).
-- **Zoom.** Open any diagram or image full-screen, then zoom and pan with keys or the mouse.
+- **Live.** Every keystroke re-renders. Only changed blocks are redrawn, so long documents stay fast.
+- **Diagrams.** Mermaid and D2 render as images in your colorscheme's colors, sized to your font.
 - **Math.** Inline `$…$` becomes Unicode text; display math renders with KaTeX.
-- **Styled.** Heading bands, code with syntax colors, tables, GitHub alerts, task lists, `<details>` blocks, inline badges. Colors come from your colorscheme.
+- **Scroll sync, both ways.** The preview follows your cursor; scrolling the preview scrolls the source.
+- **Zoom.** Open any diagram or image full-screen, then zoom and pan.
+- **Follow links.** Web links, `#heading` links and links to other markdown files.
+- **Export.** Write the document to PDF or HTML, diagrams and math included.
+- **GitHub markdown and more.** Alerts, tables, task lists, footnotes, `<details>`, Obsidian callouts and wikilinks, MDX.
 
-![vellum.nvim: markdown source on the left, live preview on the right, with badges, a mermaid flowchart, a table and code](docs/hero.png)
+![The preview beside its source, with badges, a mermaid flowchart, a table and code](docs/hero.png)
 
-Colors follow your colorscheme, light or dark, diagrams included:
+Colors follow your colorscheme, light or dark:
 
 <p>
-  <img src="docs/light.png" width="49%" alt="The preview in rose-pine dawn: task list, warning alert, sequence diagram, details block">
+  <img src="docs/light.png" width="49%" alt="The preview in rose-pine dawn">
   <img src="docs/carbonfox.png" width="49%" alt="The same document in carbonfox">
 </p>
 
 ## Requirements
 
-- Neovim ≥ 0.12 with `termguicolors`
-- Node.js ≥ 20 (for diagrams and non-PNG images)
-- For images: [kitty](https://sw.kovidgoyal.net/kitty/) or [Ghostty](https://ghostty.org). Works over ssh. In tmux, add:
+- Neovim 0.12 or newer, with `termguicolors`.
+- Node.js 20 or newer, for diagrams, display math and non-PNG images.
+- For images: [kitty](https://sw.kovidgoyal.net/kitty/) or [Ghostty](https://ghostty.org). Works over ssh. Elsewhere, diagrams show as code.
+- In tmux, add:
   ```tmux
   set -g allow-passthrough on
-  set -as terminal-features ',xterm-256color:RGB'   # your outer $TERM; ssh drops COLORTERM
+  set -as terminal-features ',xterm-256color:RGB'   # your outer $TERM
   ```
-- A [Nerd Font](https://www.nerdfonts.com) for the alert and checkbox icons
+- A [Nerd Font](https://www.nerdfonts.com), for alert and checkbox icons.
 
 ## Install
 
-With [lazy.nvim](https://github.com/folke/lazy.nvim):
+[lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
@@ -44,66 +47,58 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 }
 ```
 
-lazy runs `build.lua` on install. It installs the diagram renderer: `npm ci` and a small headless Chrome download.
+lazy installs the diagram renderer for you (`npm ci` and a small headless Chrome).
 
-If you don't use lazy, that build step never runs, so run it once. In Neovim:
+**Other plugin managers:** run `:Vellum build` once after installing, and again after updates.
 
-```vim
-:Vellum build
-```
-
-It opens a terminal that installs the renderer, so you can watch npm and the Chrome download work. Wait for it to finish. Re-run it after pulling changes that touch `build.lua` or `render/`. Then `:checkhealth vellum` confirms it worked.
-
-With Nix, the flake's `packages.<system>.plugin` comes with the renderer and a browser built in (Linux and Apple Silicon Macs). Node must be on your `PATH`. For [nixvim](https://github.com/nix-community/nixvim), the module adds both:
+**Nix:** the flake's `packages.<system>.plugin` has the renderer and a browser built in. Node must be on your `PATH`. With [nixvim](https://github.com/nix-community/nixvim), the module adds both:
 
 ```nix
 imports = [ inputs.vellum.nixvimModules.default ];
-keymaps = [ { mode = "n"; key = "<leader>mp"; action = "<cmd>Vellum<cr>"; } ];
 ```
 
-If diagrams don't show, run `:checkhealth vellum`. It checks Node, renders a test diagram, and says what your terminal or tmux setup is missing.
+Then check your setup with `:checkhealth vellum`. It renders a test diagram and says what is missing.
 
 ## Use
 
-`:Vellum` toggles the preview. It also closes once no window shows the markdown file.
-
-`:Vellum export` writes the markdown buffer to a PDF beside it. `:Vellum export notes.html` writes a self-contained HTML file instead. Exports are light, like GitHub, with diagrams, math, alerts and footnotes, and `<details>` blocks opened.
+| Command | What it does |
+|---|---|
+| `:Vellum` | Open or close the preview |
+| `:Vellum export` | Write a PDF beside the file (`:Vellum export notes.html` for HTML) |
+| `:Vellum build` | Install the renderer (not needed with lazy or Nix) |
 
 In the preview:
 
-- `gx` or `<CR>` on a link follows it. Web links open in your browser, `#heading` links jump to the heading, and links to other markdown files open them in the source window (the preview follows). Other files open in their default app.
-- `<CR>` on a diagram or image opens it full-screen.
-- `q` closes the preview. With `tab = true`, `Tab`/`gt`/`S-Tab` here (and in the source buffer while the preview is open) move between the two tabs.
+- `<CR>` or `gx` on a link follows it. `<CR>` on a diagram or image opens it full-screen.
+- `q` closes the preview.
+- With `tab = true`, `Tab` and `S-Tab` switch between the source and preview tabs.
 
-Full-screen:
+Full-screen: `+` / `-` or Ctrl+wheel zoom, `hjkl` or the mouse pan, `0` fits, `q` closes.
 
-- `+` / `-` zoom. Ctrl+wheel zooms toward the mouse pointer.
-- `hjkl`, the arrow keys or the mouse wheel pan.
-- `0` fits the image to the screen.
-- `q` or `<Esc>` closes it.
-
-To zoom without leaving the markdown buffer, map `require('vellum').zoom()`. It opens the image at your cursor:
+To zoom from the markdown buffer, map `require('vellum').zoom()`:
 
 ```lua
 vim.keymap.set('n', '<leader>mz', function() require('vellum').zoom() end)
 ```
 
-Options (the defaults):
+## Configuration
+
+The defaults:
 
 ```lua
 require('vellum').setup({
+  split = 'right',   -- where the preview opens: 'right', 'left', 'above' or 'below'
+  size = nil,        -- its width or height in cells; nil for half
+  tab = false,       -- true: open the preview in its own tab instead
+  auto_open = false, -- true: open the preview whenever a markdown file is shown
   max_width = 100,   -- widest text column in the preview
-  max_pixels = nil,  -- most pixels in one rendered diagram, math or non-PNG image; nil for no cap
-  tab = false,       -- true: the preview opens in its own tab, and :Vellum switches to it
-  split = 'right',   -- where the preview splits off: 'right', 'left', 'above' or 'below'
-  size = nil,        -- its width (left/right) or height (above/below) in cells; nil: half
-  auto_open = false, -- true: open the preview when a markdown file shows in a window
+  max_pixels = nil,  -- cap on pixels per rendered picture; nil for no cap
 })
 ```
 
-A misspelled or mistyped option is skipped with a warning.
+A misspelled option is skipped with a warning.
 
-The preview's colors are highlight groups named `Vellum*` (`:filter /^Vellum/ hi` lists them), derived from your colorscheme. Your own definitions win; set them in a `ColorScheme` autocmd so they survive a colorscheme change:
+**Colors.** The preview uses highlight groups named `Vellum*` (`:filter /^Vellum/ hi` lists them). Your own definitions win. Set them in a `ColorScheme` autocmd so they survive a colorscheme change:
 
 ```lua
 vim.api.nvim_create_autocmd('ColorScheme', {
@@ -111,33 +106,38 @@ vim.api.nvim_create_autocmd('ColorScheme', {
 })
 ```
 
-Diagrams render at 2 device pixels per CSS pixel; local PNG files go to the
-terminal as they are. Some terminal multiplexers
-silently drop large images: herdr 0.9.5 shows nothing above about 5.9
-megapixels. Set `max_pixels = 5.5e6` there, and big diagrams render at a lower
-scale instead. They keep their size in the preview but look softer when zoomed.
+**`max_pixels`.** Some terminal multiplexers drop large images without a word (herdr shows nothing above about 5.9 megapixels). Set `max_pixels = 5.5e6` there; big diagrams then render at a lower resolution.
 
-## D2
+## Diagrams
 
-` ```d2 ` blocks render like mermaid, with no extra install. If the [`d2`](https://d2lang.com) command is installed, it renders them instead: a newer D2, with your layout plugins (TALA) and `D2_*` settings. `:checkhealth vellum` says which one is used. A diagram's own `vars: { d2-config: { ... } }` wins: its `theme-id`, `theme-overrides`, `pad`, `sketch` and `layout-engine` (`elk` too). Icons can be URLs or files; file paths are relative to the markdown file. Markdown, LaTeX and code labels render. Only the main board shows, as with `d2 in.d2 out.png`; `layers`, `scenarios` and `steps` are not drawn. Exports draw D2 in its default light theme.
+**Mermaid** renders with the same engine as GitHub, in a headless Chrome.
 
-## Supported
+**D2** works with no extra install. If the [`d2`](https://d2lang.com) command is installed, it is used instead: a newer D2, with your layout plugins (like TALA) and `D2_*` settings.
 
-| Markdown | Rendering |
+- A diagram's own `vars: { d2-config: { ... } }` wins: `theme-id`, `theme-overrides`, `pad`, `sketch`, `layout-engine`.
+- Icons can be URLs or files; file paths are relative to the markdown file.
+- Markdown, LaTeX and code labels render.
+- Only the main board is drawn; `layers`, `scenarios` and `steps` are not.
+
+Each picture renders once and is cached on disk (up to 100 MB).
+
+## What renders
+
+| Markdown | In the preview |
 |---|---|
-| Headings | H1 band, H2 rule, colored levels |
-| Emphasis, strike, `code`, links, bare URLs | styled inline |
-| Lists, task lists, ordered lists | bullets per depth, checkboxes |
-| Quotes and `> [!NOTE]` alerts | colored bar and title |
-| Obsidian callouts (`> [!question]- Title`), `==highlight==`, `[[wikilinks]]` | callout colors and titles, marked text, links you can follow |
-| Tables | aligned, wrapped to fit, zebra rows |
-| Fenced code | tree-sitter syntax colors, language label |
-| ` ```mermaid `, ` ```d2 ` | image in your colorscheme's colors (text fallback outside kitty/Ghostty) |
-| Footnotes | superscript refs, muted notes |
-| Math: `$…$`, `$$…$$`, ` ```math ` | inline as Unicode text (`x²`, `α ≤ β`); display math as a KaTeX image (Unicode text elsewhere) |
-| Images: PNG, JPG, GIF, WebP, SVG, local or http(s) | image (alt text elsewhere) |
-| Front matter, HTML blocks | shown as YAML / text; comments hidden |
-| MDX (`.mdx`) | as markdown; JSX tags like HTML, `import`/`export` lines and `{/* comments */}` hidden |
+| Headings | colored by level, H1 band, H2 rule |
+| Bold, italic, strike, `code`, links, URLs | styled inline |
+| Lists, task lists | bullets by depth, checkboxes |
+| Quotes, `> [!NOTE]` alerts, Obsidian callouts | colored bar and title |
+| Tables | aligned, wrapped to fit |
+| Code blocks | syntax colors, language label |
+| ` ```mermaid `, ` ```d2 ` | image (code outside kitty and Ghostty) |
+| `$…$`, `$$…$$`, ` ```math ` | Unicode text inline; KaTeX image for display math |
+| Images: PNG, JPG, GIF, WebP, SVG, local or web | image (alt text elsewhere) |
+| Footnotes | superscript refs, notes at the end |
+| `==highlight==`, `[[wikilinks]]` | marked text, links you can follow |
+| Front matter, HTML, `<details>` | shown as text; comments hidden; details open |
+| MDX (`.mdx`) | as markdown; `import`/`export` and `{/* comments */}` hidden |
 
 ## Contributing
 

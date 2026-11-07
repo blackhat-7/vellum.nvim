@@ -123,7 +123,73 @@ graph TB
 | Streaming | Kafka ×3           |        3 |      25 ms | `@data`      |
 | Storage   | Aurora, Redis, DDB |        5 |      40 ms | `@storage`   |
 
-## 2. Capacity model
+## 2. Platform map
+
+The same system by tier, drawn with D2. Order events flow through Kafka.
+
+```d2
+classes: {
+  node: { style: { border-radius: 10; font-size: 18 } }
+  tier: { style: { border-radius: 16; font-size: 24; bold: true } }
+  async: { style: { stroke-dash: 4; animated: true } }
+}
+
+clients: Clients {
+  class: tier
+  grid-columns: 3
+  grid-gap: 24
+  web: Web app { class: node; icon: https://icons.terrastruct.com/dev%2Freact.svg }
+  ios: iOS { class: node; icon: https://icons.terrastruct.com/dev%2Fswift.svg }
+  android: Android { class: node; icon: https://icons.terrastruct.com/dev%2Fandroid.svg }
+}
+
+edge: Edge {
+  class: tier
+  grid-columns: 3
+  grid-gap: 24
+  cdn: CloudFront { class: node; icon: https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-CloudFront_light-bg.svg }
+  waf: WAF { class: node; icon: https://icons.terrastruct.com/aws%2FSecurity%2C%20Identity%2C%20&%20Compliance%2FAWS-WAF_light-bg.svg }
+  gw: API gateway { class: node; icon: https://icons.terrastruct.com/essentials%2F112-server.svg }
+}
+
+services: Services (EKS, 2 zones) {
+  class: tier
+  grid-columns: 3
+  grid-gap: 24
+  checkout: Checkout { class: node; icon: https://icons.terrastruct.com/dev%2Fgo.svg }
+  orders: Orders { class: node; icon: https://icons.terrastruct.com/dev%2Fjava.svg }
+  payments: Payments { class: node; icon: https://icons.terrastruct.com/dev%2Fruby.svg }
+  inventory: Inventory { class: node; icon: https://icons.terrastruct.com/dev%2Fpython.svg }
+  search: Search { class: node; icon: https://icons.terrastruct.com/dev%2Fjava.svg }
+  notify: Notify { class: node; icon: https://icons.terrastruct.com/dev%2Ftypescript.svg }
+}
+
+data: Data {
+  class: tier
+  grid-columns: 5
+  grid-gap: 24
+  aurora: Aurora { class: node; icon: https://icons.terrastruct.com/aws%2FDatabase%2FAmazon-Aurora_light-bg.svg }
+  cache: ElastiCache { class: node; icon: https://icons.terrastruct.com/aws%2FDatabase%2FAmazon-ElastiCache_light-bg.svg }
+  dynamo: DynamoDB { class: node; icon: https://icons.terrastruct.com/aws%2FDatabase%2FAmazon-DynamoDB_light-bg.svg }
+  orders: orders {
+    shape: sql_table
+    id: uuid { constraint: primary_key }
+    customer_id: uuid { constraint: foreign_key }
+    status: order_status
+    total: money
+    created_at: timestamptz
+  }
+  kafka: Kafka (MSK) { class: node; icon: https://icons.terrastruct.com/aws%2FAnalytics%2FAmazon-Managed-Streaming-for-Kafka_light-bg.svg }
+}
+
+clients -> edge: HTTPS
+edge -> services: mTLS
+services -> data: reads, writes
+services.checkout -> data.kafka: OrderPlaced { class: async }
+data.kafka -> services.notify: events { class: async }
+```
+
+## 3. Capacity model
 
 Each service is an $M/M/c$ queue. With arrival rate $\lambda$ and service rate
 $\mu$ per pod, utilisation is $\rho = \lambda / (c\mu)$ and must stay below $0.7$.
@@ -152,7 +218,7 @@ d_n \sim \mathcal{U}\!\left(0,\; \min\left(d_{\max},\, d_0 \cdot 2^{n}\right)\ri
 \mathbb{E}[d_n] = \tfrac{1}{2}\min\left(d_{\max},\, d_0 2^{n}\right)
 $$
 
-## 3. Checkout saga
+## 4. Checkout saga
 
 No distributed lock, no two-phase commit. The orchestrator runs local steps and
 undoes finished ones with **compensations** when a later step fails.
@@ -253,7 +319,7 @@ func (s *Saga) Run(ctx context.Context, o Order) error {
 }
 ```
 
-## 4. Order state machine
+## 5. Order state machine
 
 ```mermaid
 stateDiagram-v2

@@ -1,46 +1,7 @@
 -- :checkhealth vellum
+local state = require('vellum.state')
 local M = {}
 local h = vim.health
-
--- A real render: it proves the build, Chrome and the renderer at once. The
--- text is new each time, so a cached picture cannot stand in for it.
-local function renderer()
-  local browser, theme = require('vellum.browser'), require('vellum.theme')
-  theme.apply()
-  local function render(code, lang)
-    local state, err
-    vim.wait(20000, function()
-      state, err = browser.diagram(code, theme, lang)
-      return state ~= 'pending'
-    end, 100)
-    return state == 'ready', err or (state == 'pending' and 'no answer in 20 s')
-  end
-  local ok, err = render('flowchart LR\n  A[checkhealth ' .. vim.uv.hrtime() .. ']', 'mermaid')
-  if not ok then
-    return h.error('renderer failed: ' .. err, { 'Rebuild it: :Vellum build' })
-  end
-  h.ok('renderer works (mermaid diagram rendered)')
-  ok, err = render('checkhealth -> ' .. vim.uv.hrtime(), 'd2')
-  if ok then
-    local d2 = browser.d2_command()
-    h.ok('D2 diagrams render, with ' .. (d2 and d2.bin .. ' ' .. d2.version or 'the bundled D2'))
-    if not d2 then h.info('Install d2 (https://d2lang.com) to render with its newer version and your layout plugins') end
-  else
-    h.error('D2 failed: ' .. err, { 'Rebuild the renderer: :Vellum build' })
-  end
-end
-
-local function images()
-  local image = require('vellum.image')
-  if not image.supported then
-    h.warn("this terminal can't show images, so diagrams show as code and images as their alt text",
-      { 'Use kitty or Ghostty. In tmux, vellum asks tmux which terminal is attached.' })
-  elseif image.problem() then
-    h.warn(image.problem())
-  else
-    h.ok('images show in this terminal')
-  end
-end
 
 function M.check()
   h.start('vellum')
@@ -49,26 +10,7 @@ function M.check()
   else
     h.error('Neovim 0.12 or newer is needed')
   end
-
-  local diagrams = require('vellum.browser').diagrams
-  if not diagrams then
-    h.info('diagram support is off (diagrams = false): mermaid and D2 show as code')
-    h.info('display math, non-PNG images and export still use the renderer; set diagrams = true and run :Vellum build to install it')
-  end
-
-  -- import.meta.resolve, which the renderer uses, is stable from Node 20.6
-  local ok, r = pcall(function() return vim.system({ 'node', '--version' }, { text = true }):wait() end)
-  local v = ok and r.code == 0 and vim.version.parse(r.stdout)
-  local need = diagrams and 'Diagrams, display math and non-PNG images' or 'Display math and non-PNG images'
-  if not v then
-    h.error('node not found. ' .. need .. ' need Node.js 20.6 or newer')
-  elseif vim.version.lt(v, { 20, 6, 0 }) then
-    h.error('node ' .. tostring(v) .. ' is too old. ' .. need .. ' need 20.6 or newer')
-  else
-    h.ok('node ' .. tostring(v))
-    if diagrams then renderer() end
-  end
-  images()
+  state.backend.health(h)
 end
 
 return M

@@ -214,6 +214,14 @@ do
   check('NUL in a script', pcall(doc, 'a $x^{a\0b}$ c'))
   check('deep nesting shows the source', latex.text(('{'):rep(10000)) == ('{'):rep(10000))
   check('math in a table cell stays in the cell', find(doc('| a |\n|---|\n| $$x^2$$ |'), '│ x² │'))
+  -- zero-Chromium mode: no KaTeX picture even where images can show
+  local state = require('vellum.state')
+  image.supported = true
+  state.use(false)
+  lines = doc('$$\n\\frac{a}{b}\\,c\n$$', 40)
+  state.use(true)
+  image.supported = false
+  check('chromium = false: display math stays text', find(lines, 'a/b c'), vim.inspect(lines))
 end
 
 -- inline styles land on the right text: the group covering `word`'s first byte
@@ -465,6 +473,17 @@ do
   image.drop, image.supported = drop, false
 end
 
+-- zero-Chromium mode: images show their alt text, even where images can show
+do
+  local state = require('vellum.state')
+  image.supported = true
+  state.use(false)
+  local lines = doc('![Logo text](test/images/logo.svg)')
+  state.use(true)
+  image.supported = false
+  check('chromium = false: images show alt text', find(lines, '󰋩 Logo text'), vim.inspect(lines))
+end
+
 -- images need 'termguicolors', read when used: Neovim may set it after startup
 do
   vim.o.termguicolors = false
@@ -692,10 +711,10 @@ do
   check(':Vellum build runs the renderer build', ran, said)
   package.loaded['vellum.build'] = nil
   local build = dofile('lua/vellum/build.lua')
-  check('renderer build installs deps, then the browser when diagrams are on',
+  check('renderer build installs deps, then the browser when chromium is on',
     build.deps[1] == 'npm' and build.browser[1] == 'npx'
       and vim.uv.fs_stat(build.root .. '/render/package.json') ~= nil, vim.inspect({ build.root, build.deps, build.browser }))
-  -- lazy's hook cannot see the diagrams option, so it installs no browser
+  -- lazy's hook cannot see the chromium option, so it installs no browser
   local system, sysargs = vim.system, nil
   vim.system = function(a, o) sysargs = { a, o }; return { wait = function() return { code = 0, stderr = '' } end } end
   dofile('build.lua')
@@ -714,18 +733,14 @@ do
     argv and argv[1] == 'sh' and argv[3] == 'npm ci && npx puppeteer browsers install chrome-headless-shell'
       and opts.term and opts.cwd == root .. '/render' and #vim.api.nvim_list_wins() == wins + 1, vim.inspect({ argv, opts }))
   vim.cmd('close')
-  -- diagrams off: the browser download is skipped
-  argv = nil
-  build.run(false)
-  check(':Vellum build installs no browser when diagrams are off', argv and argv[3] == 'npm ci', vim.inspect(argv))
-  vim.cmd('close')
-  require('vellum').setup({ diagrams = false })
+  -- chromium = false: the browser download is skipped
+  require('vellum').setup({ chromium = false })
   argv, said = nil, nil
   build.run()
-  check(':Vellum build follows diagrams = false', argv and argv[3] == 'npm ci' and said and said:find('diagrams are off'),
+  check(':Vellum build installs no browser when chromium is off', argv and argv[3] == 'npm ci' and said and said:find('chromium = false'),
     vim.inspect({ argv, said }))
   vim.cmd('close')
-  require('vellum').setup({ diagrams = true })
+  require('vellum').setup({ chromium = true })
   -- a renderer built by a package manager (Nix) is read-only
   vim.uv.fs_chmod(root .. '/render', tonumber('555', 8))
   said, argv = nil, nil
@@ -786,20 +801,32 @@ do
   browser.start, image.supported, image.problem = start, supported, problem
 end
 
--- diagrams = false: mermaid and D2 fences stay code, and ask for no browser
+-- chromium = false: mermaid and D2 fences stay code, and ask for no browser
 do
   local browser, vellum = require('vellum.browser'), require('vellum')
   local start, supported = browser.start, image.supported
   local started = false
   browser.start = function() started = true; return 'no renderer in this test' end
   image.supported = true
-  vellum.setup({ diagrams = false })
+  vellum.setup({ chromium = false })
   local lines = doc('```mermaid\ngraph TD\n  off --> code\n```')
-  check('diagrams = false keeps mermaid as code', find(lines, 'graph TD') and not started, vim.inspect(lines))
+  check('chromium = false keeps mermaid as code', find(lines, 'graph TD') and not started, vim.inspect(lines))
   lines = doc('```d2\noff -> code\n```')
-  check('diagrams = false keeps D2 as code', find(lines, 'off %-> code') and not started, vim.inspect(lines))
-  vellum.setup({ diagrams = true })
+  check('chromium = false keeps D2 as code', find(lines, 'off %-> code') and not started, vim.inspect(lines))
+  vellum.setup({ chromium = true })
   browser.start, image.supported = start, supported
+end
+
+-- zero-Chromium export: HTML only; PDF needs the browser
+do
+  local state, vellum = require('vellum.state'), require('vellum')
+  vellum.setup({ chromium = false })
+  local text = state.backend
+  local said
+  text.export({ out = '/tmp/vellum-test.pdf', markdown = '# x', dir = '.', kinds = {} }, function(e) said = e end)
+  vellum.setup({ chromium = true })
+  check('chromium = false: exports HTML and refuses PDF',
+    text.extension == 'html' and said and said:find('PDF') and said:find('chromium = false'), vim.inspect({ text.extension, said }))
 end
 
 -- the preview in its own tab: the source keeps its own tab, the preview tab
@@ -877,11 +904,11 @@ do
   local vellum = require('vellum')
   local notify, said = vim.notify, nil
   vim.notify = function(m) said = m end
-  vellum.setup({ max_widht = 80, tab = 'yes', split = 'top', size = 0.5, max_width = 90, diagrams = 'yes' })
+  vellum.setup({ max_widht = 80, tab = 'yes', split = 'top', size = 0.5, max_width = 90, chromium = 'yes' })
   check('setup names every bad option', said and said:find('max_widht') and said:find('tab should be a boolean')
-    and said:find('split should be') and said:find('size should be') and said:find('diagrams should be a boolean'), said)
+    and said:find('split should be') and said:find('size should be') and said:find('chromium should be a boolean'), said)
   check('setup keeps good options and defaults for bad ones', vellum.config.max_width == 90 and vellum.config.tab == false
-    and vellum.config.split == 'right' and vellum.config.size == nil and vellum.config.diagrams == true, vim.inspect(vellum.config))
+    and vellum.config.split == 'right' and vellum.config.size == nil and vellum.config.chromium == true, vim.inspect(vellum.config))
   said = nil
   vellum.setup({ max_width = 100 })
   check('good options say nothing', said == nil, said)

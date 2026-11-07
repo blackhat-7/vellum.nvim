@@ -3,7 +3,7 @@
 -- (merged, later wins); marks are extra { start, end, group } byte ranges.
 -- A link's segments also carry `link`: its destination, or { ref = label }
 -- for a reference link, resolved when followed so the block cache stays right.
-local media = require('vellum.media')
+local state = require('vellum.state')
 local latex = require('vellum.latex')
 
 local ts = vim.treesitter
@@ -72,7 +72,7 @@ function M.parse(text, hl)
   -- a small image sits in the line; any other shows its alt text and keeps
   -- `image`, so wrap can put the picture on lines of its own
   local function picture(src, alt, hls)
-    local seg = src and media.inline(src)
+    local seg = src and state.backend.inline(src)
     segs[#segs + 1] = seg or { '󰋩 ' .. alt, with(hls, 'VellumMuted'), image = src }
   end
   local function span(n) return select(3, n:start()), select(3, n:end_()) end
@@ -187,7 +187,7 @@ end
 -- centered, with the renderer's complaint if it has one. `key` names its place in
 -- the document, so an edit shows the last picture until the new one is ready.
 function M.display(tex, width, key)
-  local pic, err = latex.picture(tex, width, key)
+  local pic, err = state.backend.math(tex, width, key)
   if pic then return pic end
   local out = M.wrap({ { latex.text(tex), { 'VellumMath' } } }, width)
   for _, l in ipairs(out) do table.insert(l, 1, { string.rep(' ', math.floor((width - M.width(l)) / 2)) }) end
@@ -230,7 +230,7 @@ function M.wrap(segs, width, key)
   end
   local k = 0
   for _, s in ipairs(segs) do
-    local pic = s.image and media.image(s.image, width)
+    local pic = s.image and state.backend.image(s.image, width)
     if s.display then
       k = k + 1
       pic = M.display(s.display, width, key and key .. ':' .. k)

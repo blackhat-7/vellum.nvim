@@ -5,7 +5,7 @@ Thanks for helping. This page has what you need: setup, checks, the code map and
 ## Setup
 
 - Neovim 0.12 or newer. Node 20 or newer, for the renderer only.
-- Build the renderer once: `:Vellum build` (with diagrams on, the default), or `(cd render && npm ci && npx puppeteer browsers install chrome-headless-shell)`.
+- Build the renderer once: `:Vellum build` (with Chromium on, the default), or `(cd render && npm ci && npx puppeteer browsers install chrome-headless-shell)`.
 - Try it: `nvim --clean -u test/init.lua test/sample.md -c Vellum`.
 
 ## Checks
@@ -25,16 +25,20 @@ nvim --clean -l test/render.lua   # real renderer: every test diagram, math, ima
 ## Code map
 
 - `lua/vellum/init.lua`: the preview window, autocmds, scroll sync, `setup()`.
+- `lua/vellum/state.lua`: startup state and the active backend.
+- `lua/vellum/backend/chromium.lua`: pictures through the headless browser.
+- `lua/vellum/backend/text.lua`: the zero-Chromium path: code, text math, alt text, HTML export.
 - `lua/vellum/render.lua`: markdown blocks (tree-sitter) to styled lines. Caches each block.
 - `lua/vellum/inline.lua`: inline markdown and word wrap.
-- `lua/vellum/code.lua`: code panels and diagrams.
-- `lua/vellum/latex.lua`: math as Unicode text, or a KaTeX picture.
-- `lua/vellum/media.lua`: images.
+- `lua/vellum/code.lua`: code panels.
+- `lua/vellum/latex.lua`: math as Unicode text.
+- `lua/vellum/media.lua`: images, through the browser.
 - `lua/vellum/mdx.lua`: MDX files.
 - `lua/vellum/theme.lua`: colors, all taken from the colorscheme.
 - `lua/vellum/image.lua`: kitty graphics through Unicode placeholders.
 - `lua/vellum/browser.lua` and `render/browser.mjs`: one headless Chrome that turns diagrams, display math and non-PNG images into cached PNGs.
-- `lua/vellum/build.lua` and `build.lua`: install the renderer.
+- `render/document.mjs` and `render/export.mjs`: the browser-free HTML export.
+- `lua/vellum/build.lua`, `lua/vellum/install.lua` and `build.lua`: install the renderer.
 - `flake.nix` and `nix/package.nix`: the Nix package.
 
 ## Rules
@@ -62,5 +66,5 @@ nvim --clean -l test/render.lua   # real renderer: every test diagram, math, ima
 - The preview must never scroll sideways: image rows mark only their first cell.
 - Kitty placeholders need `termguicolors`: the image id is the text color.
 - tmux needs `set -g allow-passthrough on` and RGB in `terminal-features`.
-- Puppeteer downloads a browser only when told to. `npm ci` skips both downloads (`.puppeteerrc.cjs`); `:Vellum build` installs the headless shell when diagrams are on. The renderer runs in `render/`, where that config is found.
+- Puppeteer downloads a browser only when told to. `npm ci` skips both downloads (`.puppeteerrc.cjs`); `:Vellum build` installs the headless shell when Chromium is on. The renderer runs in `render/`, where that config is found.
 - `test/run.lua` sets a private cache before loading the plugin, because loading prunes the cache.

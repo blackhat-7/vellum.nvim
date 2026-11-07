@@ -4,23 +4,22 @@
 //     resolve in dir; bin, the user's d2 command, renders it when given
 //   {"out": "/abs/file.png", "image": "/abs/path or https://..."}   any image the browser can show
 //   {"out": "/abs/file.png", "math": "\\frac{a}{b}", "color": "#rrggbb"}   display math, by KaTeX
-//   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir", "kinds": {...}, "d2bin": "/abs/d2", "diagrams": false}   a document export; diagrams false leaves mermaid and D2 as code
+//   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir", "kinds": {...}, "d2bin": "/abs/d2"}   a document export
 // Each picture request may carry "maxPixels", a cap on the PNG's pixels.
 // It answers one JSON line: {"out"} when the PNG is written, or {"out", "error"}.
 // A real browser renders exactly what GitHub renders; a fake DOM mis-measures
 // text and breaks class and gantt diagrams.
 import { spawn } from 'node:child_process';
-import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer';
+import { EXPORT_CSS, dataUrl, exporter, katexCss } from './document.mjs';
 
 const SCALE = 2; // device pixels per CSS px; kitty downsamples, so text stays crisp
 const VIEWPORT = { width: 800, height: 800 };
-const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.avif': 'image/avif' };
-const dataUrl = (file) => `data:${MIME[extname(file).toLowerCase()] ?? 'application/octet-stream'};base64,${readFileSync(file).toString('base64')}`;
 const MERMAID = fileURLToPath(import.meta.resolve('mermaid/dist/mermaid.min.js'));
 
 // No font hinting: on Linux it rounds every glyph's advance to whole pixels,
@@ -38,12 +37,6 @@ await page.setContent(`<!DOCTYPE html><body style="margin:0;background:transpare
   <div id="c" style="display:inline-block;padding:12px"></div></body>`);
 await page.addScriptTag({ path: MERMAID });
 await page.addScriptTag({ path: fileURLToPath(import.meta.resolve('katex/dist/katex.min.js')) });
-// KaTeX's fonts inlined: an about:blank page cannot fetch its relative font URLs
-const katexDir = dirname(fileURLToPath(import.meta.resolve('katex/dist/katex.min.css')));
-const katexCss = readFileSync(join(katexDir, 'katex.min.css'), 'utf8').replace(/src:[^;}]*/g, (src) => {
-  const font = readFileSync(join(katexDir, /url\((fonts\/[^)]+\.woff2)\)/.exec(src)[1])).toString('base64');
-  return `src:url(data:font/woff2;base64,${font}) format("woff2")`;
-});
 // standards mode (KaTeX needs it) puts an inline svg on a text baseline, with a gap below
 await page.addStyleTag({ content: katexCss + '.katex-display{margin:0} #c > svg{display:block}' });
 
@@ -224,81 +217,21 @@ const formula = ({ math, color }) => page.evaluate(async (tex, color) => {
   return null;
 }, math, color);
 
-// Exports: GitHub-flavored markdown with footnotes and math as HTML, then
-// mermaid and alerts done in the page, printed light like GitHub. Math
-// follows the preview's rule (inline.lua): "$…$" hugs its text and no digit
-// follows, so "$5 and $10" stays text. The libraries load on the first
-// export, so a renderer built before export existed still draws diagrams.
-let markdown;
-async function exporter() {
-  const [{ Marked }, { default: footnote }, { default: katex }] = await Promise.all([
-    import('marked'), import('marked-footnote'), import('katex'),
-  ]);
-  const tex = (text, displayMode) => katex.renderToString(text, { displayMode, throwOnError: false });
-  const inline = {
-    name: 'math',
-    level: 'inline',
-    start: (src) => src.indexOf('$'),
-    tokenizer(src) {
-      const m = /^\$\$([^$]+?)\$\$/.exec(src) ?? /^\$(?!\s)((?:\\.|[^$\\])+?)(?<!\s)\$(?!\d)/.exec(src);
-      if (m) return { type: 'math', raw: m[0], text: m[1], display: m[0].startsWith('$$') };
-    },
-    renderer: (t) => tex(t.text, t.display),
-  };
-  const block = {
-    name: 'mathBlock',
-    level: 'block',
-    start: (src) => /^\$\$/m.exec(src)?.index,
-    tokenizer(src) {
-      const m = /^\$\$([\s\S]+?)\$\$[ \t]*(?:\n|$)/.exec(src);
-      if (m) return { type: 'mathBlock', raw: m[0], text: m[1] };
-    },
-    renderer: (t) => tex(t.text, true),
-  };
-  const code = ({ text, lang }) => (lang === 'math' ? tex(text, true) : false); // false: the usual code block
-  return new Marked({ gfm: true }).use(footnote(), { extensions: [inline, block], renderer: { code } });
-}
-
-const EXPORT_CSS = `
-body { margin: 0; color: #1f2328; font: 16px/1.6 -apple-system, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
-article { max-width: 860px; margin: 0 auto; padding: 32px; }
-h1, h2 { padding-bottom: .3em; border-bottom: 1px solid #d1d9e0; }
-a { color: #0969da; }
-code, pre { font: 85% ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f6f8fa; border-radius: 6px; }
-code { padding: .2em .4em; }
-pre { padding: 16px; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
-pre code { padding: 0; font-size: 100%; background: none; }
-table { border-collapse: collapse; }
-th, td { padding: 6px 13px; border: 1px solid #d1d9e0; }
-tr:nth-child(2n) { background: #f6f8fa; }
-blockquote { margin: 0; padding: 0 1em; color: #59636e; border-left: .25em solid #d1d9e0; }
-blockquote.alert { color: inherit; }
-.alert > .title { font-weight: 600; }
-.note { border-color: #0969da; } .note > .title { color: #0969da; }
-.tip { border-color: #1a7f37; } .tip > .title { color: #1a7f37; }
-.important { border-color: #8250df; } .important > .title { color: #8250df; }
-.warning { border-color: #9a6700; } .warning > .title { color: #9a6700; }
-.caution { border-color: #d1242f; } .caution > .title { color: #d1242f; }
-li:has(> input[type=checkbox]) { list-style: none; }
-img, .mermaid svg, .diagram svg { max-width: 100%; }
-.diagram svg { height: auto; }
-.mermaid, .diagram { text-align: center; }
-pre, table, img, .mermaid, .diagram, .katex-display { break-inside: avoid; }
-`;
-
-async function exportDoc({ markdown: text, dir, out, kinds, d2bin, diagrams }) {
-  markdown ??= await exporter().catch((e) => {
+// Exports: the page turns mermaid and D2 into SVGs and prints the result.
+// The HTML itself (marked, KaTeX, alerts, heading ids) is built here too.
+async function exportDoc({ markdown: text, dir, out, kinds, d2bin }) {
+  const md = await exporter().catch((e) => {
     throw new Error('export needs a rebuilt renderer (:Vellum build): ' + e.message);
   });
   // a file:// page may load the document's relative images; about:blank may not
   const tmp = join(tmpdir(), `vellum-export-${process.pid}-${n++}.html`);
   writeFileSync(tmp, `<!DOCTYPE html><html><head><meta charset="utf-8"><base href="${pathToFileURL(dir + '/').href}">
-    <style>${katexCss}${EXPORT_CSS}</style></head><body><article>${markdown.parse(text)}</article></body></html>`);
+    <style>${katexCss}${EXPORT_CSS}</style></head><body><article>${md.parse(text)}</article></body></html>`);
   const doc = await browser.newPage();
   try {
     await doc.goto(pathToFileURL(tmp).href, { waitUntil: 'load' });
-    if (diagrams !== false) await doc.addScriptTag({ path: MERMAID });
-    await doc.evaluate(async (kinds, diagrams) => {
+    await doc.addScriptTag({ path: MERMAID });
+    await doc.evaluate(async (kinds) => {
       // callout types and colors come from the preview (render.lua ALERTS)
       for (const q of document.querySelectorAll('blockquote')) {
         const p = q.firstElementChild;
@@ -319,27 +252,24 @@ async function exportDoc({ markdown: text, dir, out, kinds, d2bin, diagrams }) {
       }
       // a printed page cannot be clicked open
       for (const d of document.querySelectorAll('details')) d.open = true;
-      // diagrams off (setup's `diagrams`): fences stay as their source
-      if (diagrams !== false) {
-        mermaid.initialize({ startOnLoad: false, theme: 'default' });
-        let i = 0;
-        for (const code of document.querySelectorAll('pre > code.language-mermaid')) {
-          const box = document.createElement('div');
-          box.className = 'mermaid';
-          const id = 'export' + i++;
-          try {
-            box.innerHTML = (await mermaid.render(id, code.textContent)).svg;
-            code.parentElement.replaceWith(box);
-          } catch {
-            document.getElementById('d' + id)?.remove(); // a broken diagram stays as its source
-          }
+      mermaid.initialize({ startOnLoad: false, theme: 'default' });
+      let i = 0;
+      for (const code of document.querySelectorAll('pre > code.language-mermaid')) {
+        const box = document.createElement('div');
+        box.className = 'mermaid';
+        const id = 'export' + i++;
+        try {
+          box.innerHTML = (await mermaid.render(id, code.textContent)).svg;
+          code.parentElement.replaceWith(box);
+        } catch {
+          document.getElementById('d' + id)?.remove(); // a broken diagram stays as its source
         }
       }
       await document.fonts.ready;
-    }, kinds, diagrams);
+    }, kinds);
     // D2 compiles in node, in its own light theme; a broken diagram, or a
     // build without D2, stays as its source
-    const sources = diagrams === false ? [] : await doc.$$eval('pre > code.language-d2', (codes) => codes.map((c) => c.textContent));
+    const sources = await doc.$$eval('pre > code.language-d2', (codes) => codes.map((c) => c.textContent));
     if (sources.length) {
       const svgs = [];
       for (const code of sources) svgs.push(await d2svg(code, undefined, dir, d2bin).catch(() => null));

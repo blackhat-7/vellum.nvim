@@ -1,9 +1,9 @@
 -- Live side preview for markdown: one preview window that follows the
 -- markdown buffer you are editing and scrolls with its cursor.
 local render = require('vellum.render')
+local state = require('vellum.state')
 local theme = require('vellum.theme')
 local image = require('vellum.image')
-local browser = require('vellum.browser')
 local zoom = require('vellum.zoom')
 local links = require('vellum.links')
 local mdx = require('vellum.mdx')
@@ -11,9 +11,9 @@ local mdx = require('vellum.mdx')
 local api = vim.api
 local M = {}
 
-M.config = { max_width = 100, tab = false, split = 'right', auto_open = false, diagrams = true }
+M.config = { max_width = 100, tab = false, split = 'right', auto_open = false, chromium = true }
 -- every option and its type; max_pixels and size default to nil
-local OPTIONS = { max_width = 'number', max_pixels = 'number', tab = 'boolean', split = 'string', size = 'number', auto_open = 'boolean', diagrams = 'boolean' }
+local OPTIONS = { max_width = 'number', max_pixels = 'number', tab = 'boolean', split = 'string', size = 'number', auto_open = 'boolean', chromium = 'boolean' }
 local SPLITS = { right = true, left = true, above = true, below = true }
 
 local ns = api.nvim_create_namespace('vellum')
@@ -117,7 +117,7 @@ local function draw()
   if not valid() then return end
   local lines, shown
   lines, S.rows, S.margin, S.anchors, shown = render.render(S.src, api.nvim_win_get_width(S.win), M.config.max_width)
-  browser.drop_stale()
+  state.backend.drop_stale()
   image.keep(shown)
   vim.bo[S.buf].modifiable = true
   api.nvim_buf_set_lines(S.buf, 0, -1, false, lines)
@@ -135,7 +135,7 @@ local function update()
     draw()
   end)
 end
-browser.on_update = update
+state.on_update = update
 
 -- Dragging a split fires WinResized for every column. Re-rendering each time
 -- (and re-placing every image in the terminal) makes the drag lag, so draw
@@ -166,8 +166,8 @@ function M.setup(opts)
     end
   end
   if #bad > 0 then vim.notify('vellum: ' .. table.concat(bad, '; '), vim.log.levels.WARN) end
-  browser.max_pixels = M.config.max_pixels
-  browser.diagrams = M.config.diagrams
+  state.use(M.config.chromium)
+  state.backend.configure(M.config)
   api.nvim_create_augroup('vellum_auto', { clear = true })
   if M.config.auto_open then
     -- markdown in a real file window: hover popups and picker previews are markdown too
@@ -219,8 +219,7 @@ function M.open()
   end
   theme.apply()
   -- The preview falls back to text on its own; say why, once a session.
-  local why = not image.supported and "this terminal can't show images (kitty and Ghostty can), so diagrams show as code"
-    or image.problem()
+  local why = state.backend.warning()
   if why and not warned then
     warned = true
     vim.notify('vellum: ' .. why .. '\nMore: :checkhealth vellum', vim.log.levels.WARN)
@@ -343,7 +342,8 @@ function M.zoom()
 end
 
 -- Write the markdown buffer (the current one, or the previewed one when in
--- the preview) to `path`, a .pdf or .html file; by default a PDF beside it.
+-- the preview) to `path`, a .pdf or .html file; by default a PDF beside it, or
+-- HTML when Chromium is off.
 function M.export(path)
   local buf = api.nvim_get_current_buf()
   if buf == S.buf then buf = S.src end
@@ -351,7 +351,8 @@ function M.export(path)
     return vim.notify('vellum: export works on a markdown buffer', vim.log.levels.ERROR)
   end
   local name = api.nvim_buf_get_name(buf)
-  path = (path or '') ~= '' and vim.fn.fnamemodify(vim.fn.expand(path), ':p') or name ~= '' and vim.fn.fnamemodify(name, ':p:r') .. '.pdf'
+  path = (path or '') ~= '' and vim.fn.fnamemodify(vim.fn.expand(path), ':p')
+    or name ~= '' and vim.fn.fnamemodify(name, ':p:r') .. '.' .. state.backend.extension
   if not path or not (path:match('%.pdf$') or path:match('%.html$')) then
     return vim.notify('vellum: export to a .pdf or .html file, e.g. :Vellum export notes.pdf', vim.log.levels.ERROR)
   end
@@ -360,7 +361,7 @@ function M.export(path)
   local dir = name ~= '' and vim.fs.dirname(vim.fn.fnamemodify(name, ':p')) or vim.fn.getcwd()
   local kinds = {} -- callout type → its color, as in the preview
   for kind, a in pairs(render.alerts) do kinds[kind:lower()] = a[2]:lower() end
-  browser.export({ markdown = text, dir = dir, out = path, kinds = kinds }, function(err)
+  state.backend.export({ markdown = text, dir = dir, out = path, kinds = kinds }, function(err)
     if err then
       vim.notify('vellum: export failed: ' .. err, vim.log.levels.ERROR)
     else

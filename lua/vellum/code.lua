@@ -1,18 +1,10 @@
--- Code blocks: shaded panels with tree-sitter syntax colors, and mermaid
--- and D2 diagrams rendered to images.
-local image = require('vellum.image')
-local browser = require('vellum.browser')
-local theme = require('vellum.theme')
+-- Code blocks as shaded panels with tree-sitter syntax colors. Diagram
+-- backends use M.panel for code, errors and the "rendering…" placeholder.
 local inline = require('vellum.inline')
-local media = require('vellum.media')
 
 local ts = vim.treesitter
 local strwidth = vim.api.nvim_strwidth
 local M = {}
-
-local last_diagram = {} -- source row → last ready diagram, shown while an edit re-renders
-
-function M.reset() last_diagram = {} end
 
 -- Syntax highlight ranges per 0-based row: { { start, end, group }, ... }.
 local function highlights(code, lang)
@@ -72,21 +64,6 @@ function M.panel(code, lang, width, label, err)
   end
   out[#out + 1] = { { string.rep(' ', width), bg } }
   return out
-end
-
--- A diagram in `lang`, 'mermaid' or 'd2', as a picture; its code while it
--- first renders, or with the error when it cannot.
-function M.diagram(code, width, row, lang)
-  if not browser.diagrams then return M.panel(code, lang, width) end
-  if image.problem() then return M.panel(code, lang, width, nil, image.problem()) end
-  local state, a, b = browser.diagram(code, theme, lang, media.dir)
-  if state == 'ready' then
-    last_diagram[row] = media.picture(a, b[1], b[2], width, b[3])
-    return last_diagram[row]
-  elseif state == 'error' then
-    return M.panel(code, lang, width, nil, a)
-  end
-  return last_diagram[row] or M.panel(code, lang, width, 'rendering…')
 end
 
 return M

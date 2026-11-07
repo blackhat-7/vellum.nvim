@@ -12,7 +12,6 @@ local exports = {} -- out → function(error) to call when the export is done
 M.on_update = function() end
 M.waiting = 0 -- counts every answer 'pending': output showing one must not be cached
 M.max_pixels = nil -- most pixels in one rendered PNG, from setup(); nil for no cap
-M.diagrams = true -- mermaid and D2 as pictures, from setup(); false leaves them as code
 
 -- Keep the cache under 100 MB, least recently used out first. Runs once per
 -- session, before any file is shown; request() bumps the mtime of files it uses.
@@ -153,9 +152,8 @@ function M.export(req, done)
   local err = M.start()
   if err then return done(err) end
   exports[req.out] = done
-  local d2 = M.diagrams and M.d2_command() or nil
+  local d2 = M.d2_command()
   req.d2bin = d2 and d2.bin
-  req.diagrams = M.diagrams
   job:write(vim.json.encode(req) .. '\n')
 end
 

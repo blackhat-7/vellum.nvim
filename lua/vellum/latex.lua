@@ -1,11 +1,6 @@
--- LaTeX math: Unicode text for inline math ("\alpha^2" → "α²"), KaTeX
--- pictures for display math. The text is also what display math shows while
--- its picture renders, and in terminals without images.
-local image = require('vellum.image')
-local browser = require('vellum.browser')
-local theme = require('vellum.theme')
-local media = require('vellum.media')
-
+-- LaTeX math → Unicode text ("\alpha^2" → "α²"). Display math pictures live
+-- in the Chromium backend; the text is what display math shows while its
+-- picture renders, and in zero-Chromium mode.
 local M = {}
 
 local CHAR = '[%z\1-\127\194-\244][\128-\191]*'
@@ -298,26 +293,6 @@ end
 function M.text(tex)
   local ok, s = pcall(convert, tex)
   return ok and s or tex
-end
-
-local last = {} -- key → last ready picture, shown while an edit re-renders
-
-function M.reset() last = {} end
-
--- Display math as picture lines. Nil while it renders (unless an earlier
--- version under `key` is ready) or where pictures cannot show; nil, error
--- when KaTeX rejects it.
-function M.picture(tex, width, key)
-  if not image.supported or image.problem() then return nil end
-  local state, a, b = browser.math(tex, theme.math)
-  if state == 'ready' then
-    local lines = media.picture(a, b[1], b[2], width, b[3])
-    if key then last[key] = lines end
-    return lines
-  elseif state == 'error' then
-    return nil, a
-  end
-  return key and last[key]
 end
 
 return M

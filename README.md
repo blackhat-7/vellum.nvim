@@ -25,7 +25,7 @@ Colors follow your colorscheme, light or dark:
 ## Requirements
 
 - Neovim 0.12 or newer, with `termguicolors`.
-- Node.js 20 or newer, for diagrams, display math and non-PNG images.
+- Node.js 20 or newer, for diagrams, display math, non-PNG images and export.
 - For images: [kitty](https://sw.kovidgoyal.net/kitty/) or [Ghostty](https://ghostty.org). Works over ssh. Elsewhere, diagrams show as code.
 - In tmux, add:
   ```tmux
@@ -47,7 +47,7 @@ Colors follow your colorscheme, light or dark:
 }
 ```
 
-lazy installs the renderer's node dependencies for you. It never downloads a browser: run `:Vellum build` once (and after updates) to install the small headless Chrome that diagrams need. With `diagrams = false` that command installs no browser.
+lazy installs the renderer's node dependencies for you. It never downloads a browser: run `:Vellum build` once (and after updates) to install the small headless Chrome that diagrams need. With `chromium = false` that command installs no browser.
 
 **Other plugin managers:** run `:Vellum build` once after installing, and again after updates.
 
@@ -64,8 +64,8 @@ Then check your setup with `:checkhealth vellum`. It checks the renderer and say
 | Command | What it does |
 |---|---|
 | `:Vellum` | Open or close the preview |
-| `:Vellum export` | Write a PDF beside the file (`:Vellum export notes.html` for HTML) |
-| `:Vellum build` | Install the renderer, and the browser when diagrams are on (Nix packages both) |
+| `:Vellum export` | Write a PDF beside the file (HTML when `chromium = false`; `:Vellum export notes.html` for HTML) |
+| `:Vellum build` | Install the renderer, and the browser when Chromium is on (Nix packages both) |
 
 In the preview:
 
@@ -93,7 +93,7 @@ require('vellum').setup({
   auto_open = false, -- true: open the preview whenever a markdown file is shown
   max_width = 100,   -- widest text column in the preview
   max_pixels = nil,  -- cap on pixels per rendered picture; nil for no cap
-  diagrams = true,   -- false: mermaid and D2 as code; :Vellum build skips the browser
+  chromium = true,   -- false: no browser; diagrams as code, math as text, images as alt text
 })
 ```
 
@@ -122,7 +122,7 @@ vim.api.nvim_create_autocmd('ColorScheme', {
 
 Each picture renders once and is cached on disk (up to 100 MB). The browser starts with the first picture that needs rendering, not when the preview opens.
 
-With `diagrams = false`, mermaid and D2 fences stay as code in the preview and in exports, and `:Vellum build` installs no browser. Display math, non-PNG images and PDF/HTML export still use the renderer; set `diagrams = true` and run `:Vellum build` to install it.
+With `chromium = false`, mermaid and D2 fences stay as code, display math becomes Unicode text, images show their alt text, and export writes HTML only. `:Vellum build` then installs no browser, and PDF export is refused. Run `:Vellum build` with `chromium = true` to install the browser again.
 
 ## What renders
 

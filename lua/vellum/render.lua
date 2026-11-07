@@ -1,12 +1,10 @@
 -- Markdown blocks → styled lines for the preview buffer. A line is a list of
 -- segments (see inline.lua).
 local image = require('vellum.image')
+local state = require('vellum.state')
 local theme = require('vellum.theme')
 local inline = require('vellum.inline')
-local media = require('vellum.media')
-local browser = require('vellum.browser')
 local code = require('vellum.code')
-local latex = require('vellum.latex')
 local mdx = require('vellum.mdx')
 
 local ts = vim.treesitter
@@ -20,8 +18,7 @@ local depth = 0 -- list nesting, picks the bullet glyph
 
 function M.reset()
   cache, used = {}, {}
-  code.reset()
-  latex.reset()
+  state.backend.reset()
 end
 
 local ZWSP = '\226\128\139' -- zero-width space, see M.render
@@ -129,13 +126,13 @@ function render_block(node, width)
     used[key] = hit
     return hit[1], hit[2]
   end
-  local v = browser.waiting
+  local v = state.backend.waiting()
   local lines, anchors = fn(node, width)
   if not anchors then
     local sr, _, er, ec = node:range()
     anchors = { { 0, math.max(1, er - sr + (ec > 0 and 1 or 0)), 0, #lines } }
   end
-  if v == browser.waiting then used[key] = { lines, anchors } end
+  if v == state.backend.waiting() then used[key] = { lines, anchors } end
   return lines, anchors
 end
 
@@ -212,7 +209,7 @@ function R.fenced_code_block(node, width)
   local body = child(node, 'code_fence_content')
   local text = body and text_of(body, node) or ''
   local diagram = lang and ({ mermaid = 'mermaid', d2 = 'd2' })[lang:lower()]
-  if diagram and image.supported then return code.diagram(text, width, (node:start()), diagram) end
+  if diagram then return state.backend.diagram(text, width, (node:start()), diagram) end
   if lang and lang:lower() == 'math' then return inline.display(text, width, (node:start())) end
   return code.panel(text, lang, width)
 end
@@ -442,7 +439,7 @@ function R.fallback(node, width) return inline.wrap({ { text_of(node, node), { '
 function M.render(buf, win_width, max_width)
   src = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   is_mdx = mdx.is(buf)
-  media.dir = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':p:h')
+  state.backend.dir(vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':p:h'))
   local width = math.max(20, math.min(win_width - 4, max_width))
   local margin = string.rep(' ', math.max(0, math.floor((win_width - width) / 2)))
   depth = 0

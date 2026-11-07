@@ -8,7 +8,7 @@
 local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
 vim.opt.rtp:prepend(root)
 vim.env.XDG_CACHE_HOME = vim.fn.tempname() -- a fresh cache: everything renders
-local browser, theme = require('vellum.browser'), require('vellum.theme')
+local browser, state, theme = require('vellum.browser'), require('vellum.state'), require('vellum.theme')
 theme.apply()
 local failed = 0
 local function fail(msg)
@@ -103,17 +103,29 @@ if count('class="mermaid"') ~= 1 or count('class="diagram"') ~= 1 or count('lang
 end
 if (vim.uv.fs_stat(dir .. '/doc.pdf') or { size = 0 }).size == 0 then fail('export pdf: empty') end
 
--- diagrams = false: mermaid and D2 stay as code in the export
-browser.diagrams = false
-local plain, done, err = dir .. '/plain.html', false, nil
-browser.export({ markdown = doc, dir = dir, out = plain, kinds = {} }, function(e) done, err = true, e end)
+-- zero-Chromium export: no browser at all; diagrams stay code, math, alerts
+-- and local images are built in node
+state.use(false)
+local text = state.backend
+local no_browser = dir .. '/no-browser'
+vim.fn.mkdir(no_browser, 'p')
+local plain_doc = '# Export\n\n> [!NOTE] Title\n> alert body\n\n$$x^2$$\n\n![logo](' .. root
+  .. '/test/images/logo.svg)\n\n```mermaid\ngraph LR; A --> B\n```\n\n```d2\nx -> y\n```\n\n```d2\nx ->\n```\n'
+local plain, done, err = no_browser .. '/plain.html', false, nil
+local puppeteer = vim.env.PUPPETEER_EXECUTABLE_PATH
+vim.env.PUPPETEER_EXECUTABLE_PATH = '/nonexistent' -- proves the export launches no Chrome
+text.export({ markdown = plain_doc, dir = no_browser, out = plain, kinds = { note = 'note' } }, function(e) done, err = true, e end)
 vim.wait(60000, function() return done end, 50)
-browser.diagrams = true
+vim.env.PUPPETEER_EXECUTABLE_PATH = puppeteer
+state.use(true)
 local code = done and not err and table.concat(vim.fn.readfile(plain), '\n') or ''
 local n = function(pat) return select(2, code:gsub(pat, '')) end
 if code == '' or n('language%-mermaid') ~= 1 or n('language%-d2') ~= 2 or n('class="mermaid"') ~= 0 or n('class="diagram"') ~= 0 then
-  fail('export with diagrams off: diagrams not left as code' .. (err and (': ' .. err) or ''))
+  fail('export with chromium off: diagrams not left as code' .. (err and (': ' .. err) or ''))
+elseif n('class="alert note"') ~= 1 or n('class="title">Title') ~= 1 or n('class="katex"') < 1
+  or n('id="export"') ~= 1 or n('src="data:image/svg%+xml;base64,') ~= 1 then
+  fail('export with chromium off: math, alert, heading or image missing' .. (err and (': ' .. err) or ''))
 end
 
-print(('%d pictures and 2 exports in %.1f s, %d failed'):format(#jobs, (vim.uv.hrtime() - t0) / 1e9, failed))
+print(('%d pictures and 3 exports in %.1f s, %d failed'):format(#jobs, (vim.uv.hrtime() - t0) / 1e9, failed))
 vim.cmd(failed == 0 and 'qa!' or 'cq!')

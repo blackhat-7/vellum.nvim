@@ -1,4 +1,4 @@
--- Installing the node renderer (mermaid, display math, non-PNG images).
+-- Installing the node renderer (diagrams, display math, non-PNG images).
 -- Root build.lua runs these steps on install; :Vellum build runs them here, in
 -- a terminal, so npm and the Chrome download are visible while they run.
 local M = {}

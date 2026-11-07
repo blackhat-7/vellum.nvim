@@ -5,7 +5,8 @@
 //   {"out": "/abs/file.png", "image": "/abs/path or https://..."}   any image the browser can show
 //   {"out": "/abs/file.png", "math": "\\frac{a}{b}", "color": "#rrggbb"}   display math, by KaTeX
 //   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir", "kinds": {...}, "d2bin": "/abs/d2"}   a document export
-// and answers one JSON line: {"out"} when the PNG is written, or {"out", "error"}.
+// Each picture request may carry "maxPixels", a cap on the PNG's pixels.
+// It answers one JSON line: {"out"} when the PNG is written, or {"out", "error"}.
 // A real browser renders exactly what GitHub renders; a fake DOM mis-measures
 // text and breaks class and gantt diagrams.
 import { spawn } from 'node:child_process';
@@ -19,6 +20,8 @@ import puppeteer from 'puppeteer';
 const SCALE = 2; // device pixels per CSS px; kitty downsamples, so text stays crisp
 const VIEWPORT = { width: 800, height: 800 };
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.avif': 'image/avif' };
+const dataUrl = (file) => `data:${MIME[extname(file).toLowerCase()] ?? 'application/octet-stream'};base64,${readFileSync(file).toString('base64')}`;
+const MERMAID = fileURLToPath(import.meta.resolve('mermaid/dist/mermaid.min.js'));
 
 // No font hinting: on Linux it rounds every glyph's advance to whole pixels,
 // so text came out wider than D2 laid it out (code overflowed its boxes)
@@ -33,7 +36,7 @@ const page = await browser.newPage();
 await page.setViewport({ ...VIEWPORT, deviceScaleFactor: SCALE });
 await page.setContent(`<!DOCTYPE html><body style="margin:0;background:transparent">
   <div id="c" style="display:inline-block;padding:12px"></div></body>`);
-await page.addScriptTag({ path: fileURLToPath(import.meta.resolve('mermaid/dist/mermaid.min.js')) });
+await page.addScriptTag({ path: MERMAID });
 await page.addScriptTag({ path: fileURLToPath(import.meta.resolve('katex/dist/katex.min.js')) });
 // KaTeX's fonts inlined: an about:blank page cannot fetch its relative font URLs
 const katexDir = dirname(fileURLToPath(import.meta.resolve('katex/dist/katex.min.css')));
@@ -121,7 +124,7 @@ async function d2svg(code, theme, dir, bin) {
     const config = {};
     if (r && own.pad == null) config.pad = 12;
     if (themed) Object.assign(config, { 'theme-id': theme.themeID, 'theme-overrides': theme.themeOverrides });
-    return d2command(bin, Object.keys(config).length ? `${code}\nvars: { d2-config: ${d2map(config)} }\n` : code, dir);
+    return sized(await d2command(bin, Object.keys(config).length ? `${code}\nvars: { d2-config: ${d2map(config)} }\n` : code, dir));
   }
   const options = { ...r.renderOptions, pad: own.pad ?? 12, noXMLTag: true };
   if (themed) Object.assign(options, theme);
@@ -130,10 +133,16 @@ async function d2svg(code, theme, dir, bin) {
     if (!icon || icon.Scheme || !dir) continue;
     const file = resolve(dir, icon.Path);
     let data;
-    try { data = readFileSync(file).toString('base64'); } catch { continue; } // missing: an empty icon, as D2 shows it
-    shape.icon = { ...icon, Scheme: 'data', Opaque: `${MIME[extname(file).toLowerCase()] ?? 'application/octet-stream'};base64,${data}`, Path: '', RawPath: '' };
+    try { data = dataUrl(file); } catch { continue; } // missing: an empty icon, as D2 shows it
+    shape.icon = { ...icon, Scheme: 'data', Opaque: data.slice('data:'.length), Path: '', RawPath: '' };
   }
-  return d2.render(r.diagram, options);
+  return sized(await d2.render(r.diagram, options));
+}
+
+// D2's root svg has only a viewBox; unsized, it collapses in a shrink-wrapped box
+function sized(svg) {
+  const [, , w, h] = /viewBox="([^"]+)"/.exec(svg)[1].split(/[\s,]+/);
+  return svg.replace('<svg ', `<svg width="${w}" height="${h}" `);
 }
 
 // An object as a D2 map: { pad: 12; theme-overrides: { N1: "#000000" } }
@@ -175,11 +184,6 @@ const d2diagram = async ({ d2: code, theme, dir, bin }) => {
       i.addEventListener('error', done);
       setTimeout(done, 10000);
     }));
-    // the outer svg has only a viewBox; unsized, it collapses in the shrink-wrapped box
-    const s = c.firstElementChild;
-    const [, , w, h] = s.getAttribute('viewBox').split(/[\s,]+/);
-    s.setAttribute('width', w);
-    s.setAttribute('height', h);
     await Promise.all(icons);
     await document.fonts.ready; // D2 embeds its fonts; a shot before they load shows fallback glyphs
     return null;
@@ -189,7 +193,7 @@ const d2diagram = async ({ d2: code, theme, dir, bin }) => {
 const picture = ({ image }) => {
   // local files go in as data URLs: an about:blank page may not read file://
   const src = /^https?:\/\//.test(image) ? image
-    : `data:${MIME[extname(image).toLowerCase()] ?? 'application/octet-stream'};base64,${readFileSync(image).toString('base64')}`;
+    : dataUrl(image);
   return page.evaluate(async (src) => {
     const c = document.getElementById('c');
     c.innerHTML = '';
@@ -294,7 +298,7 @@ async function exportDoc({ markdown: text, dir, out, kinds, d2bin }) {
   const doc = await browser.newPage();
   try {
     await doc.goto(pathToFileURL(tmp).href, { waitUntil: 'load' });
-    await doc.addScriptTag({ path: fileURLToPath(import.meta.resolve('mermaid/dist/mermaid.min.js')) });
+    await doc.addScriptTag({ path: MERMAID });
     await doc.evaluate(async (kinds) => {
       // callout types and colors come from the preview (render.lua ALERTS)
       for (const q of document.querySelectorAll('blockquote')) {
@@ -344,11 +348,7 @@ async function exportDoc({ markdown: text, dir, out, kinds, d2bin }) {
           const box = document.createElement('div');
           box.className = 'diagram';
           box.innerHTML = svg;
-          const s = box.firstElementChild;
-          const [, , w, h] = s.getAttribute('viewBox').split(/[\s,]+/);
-          s.setAttribute('width', w);
-          s.setAttribute('height', h);
-                codes[i].parentElement.replaceWith(box);
+          codes[i].parentElement.replaceWith(box);
         });
         await document.fonts.ready;
       }, svgs);
@@ -362,8 +362,7 @@ async function exportDoc({ markdown: text, dir, out, kinds, d2bin }) {
       const data = {};
       for (const url of images) {
         try {
-          const file = fileURLToPath(url);
-          data[url] = `data:${MIME[extname(file).toLowerCase()] ?? 'application/octet-stream'};base64,${readFileSync(file).toString('base64')}`;
+          data[url] = dataUrl(fileURLToPath(url));
         } catch {} // a missing image stays a broken link, as in the browser
       }
       const html = await doc.evaluate((data, beside) => {

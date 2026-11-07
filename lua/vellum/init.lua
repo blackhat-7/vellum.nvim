@@ -348,8 +348,7 @@ function M.export(path)
   local dir = name ~= '' and vim.fs.dirname(vim.fn.fnamemodify(name, ':p')) or vim.fn.getcwd()
   local kinds = {} -- callout type → its color, as in the preview
   for kind, a in pairs(render.alerts) do kinds[kind:lower()] = a[2]:lower() end
-  local d2 = browser.d2_command()
-  browser.export({ markdown = text, dir = dir, out = path, kinds = kinds, d2bin = d2 and d2.bin }, function(err)
+  browser.export({ markdown = text, dir = dir, out = path, kinds = kinds }, function(err)
     if err then
       vim.notify('vellum: export failed: ' .. err, vim.log.levels.ERROR)
     else

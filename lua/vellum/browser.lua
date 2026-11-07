@@ -45,7 +45,7 @@ function M.start()
   local partial, stderr, answered = '', '', false
   local ok, proc = pcall(vim.system, { 'node', root .. '/browser.mjs' }, {
     -- puppeteer reads its config (.puppeteerrc.*) from the working directory:
-    -- a packager's render/.puppeteerrc.json applies, a user's project one does not
+    -- render/.puppeteerrc.cjs applies (Nix names its browser there), a user's project one does not
     cwd = root,
     stdin = true,
     stdout = function(_, data)
@@ -143,13 +143,15 @@ function M.drop_stale()
 end
 
 -- Write req.markdown, whose relative links resolve in req.dir, to req.out: a
--- .pdf or .html file. req.kinds maps callout types to colors. Calls
+-- .pdf or .html file, drawing D2 as diagrams do. req.kinds maps callout types to colors. Calls
 -- done(error) when finished; error is nil on success.
 function M.export(req, done)
   if exports[req.out] then return done('already exporting to ' .. req.out) end
   local err = M.start()
   if err then return done(err) end
   exports[req.out] = done
+  local d2 = M.d2_command()
+  req.d2bin = d2 and d2.bin
   job:write(vim.json.encode(req) .. '\n')
 end
 

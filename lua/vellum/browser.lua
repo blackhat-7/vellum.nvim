@@ -169,13 +169,29 @@ local function icon_versions(code, dir)
   return table.concat(out, '\0')
 end
 
+-- The user's d2 command, { bin, version }, or nil; looked up once. D2 renders
+-- with it when installed (newer than the bundled D2, with the user's layout
+-- plugins such as TALA), else with the bundled one.
+local d2_found
+function M.d2_command()
+  if d2_found == nil then
+    local bin = vim.fn.exepath('d2')
+    local r = bin ~= '' and vim.system({ bin, '--version' }, { text = true }):wait()
+    d2_found = r and r.code == 0 and { bin = bin, version = vim.trim(r.stdout) } or false
+  end
+  return d2_found or nil
+end
+
 -- A diagram in `lang`, 'mermaid' or 'd2', in the colorscheme's colors. D2's
 -- local icons resolve in `dir`, the markdown file's folder.
 function M.diagram(code, theme, lang, dir)
   if lang == 'd2' then
     dir = dir or vim.fn.getcwd()
-    local key = table.concat({ 'd2', theme.d2_signature, dir, icon_versions(code, dir), code }, '\0')
-    return request(key, { d2 = code, theme = theme.d2, dir = dir })
+    local d2 = M.d2_command()
+    -- which d2 draws it is part of the picture: installing or upgrading one renders anew
+    local by = d2 and d2.bin .. ' ' .. d2.version or 'bundled'
+    local key = table.concat({ 'd2', by, theme.d2_signature, dir, icon_versions(code, dir), code }, '\0')
+    return request(key, { d2 = code, theme = theme.d2, dir = dir, bin = d2 and d2.bin })
   end
   return request(theme.signature .. code, { code = code, theme = theme.mermaid })
 end

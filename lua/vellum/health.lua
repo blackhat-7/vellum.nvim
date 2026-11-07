@@ -22,7 +22,9 @@ local function renderer()
   h.ok('renderer works (mermaid diagram rendered)')
   ok, err = render('checkhealth -> ' .. vim.uv.hrtime(), 'd2')
   if ok then
-    h.ok('D2 diagrams render')
+    local d2 = browser.d2_command()
+    h.ok('D2 diagrams render, with ' .. (d2 and d2.bin .. ' ' .. d2.version or 'the bundled D2'))
+    if not d2 then h.info('Install d2 (https://d2lang.com) to render with its newer version and your layout plugins') end
   else
     h.error('D2 failed: ' .. err, { 'Rebuild the renderer: :Vellum build' })
   end

@@ -494,7 +494,9 @@ do
   local code = 'a: { icon: "./icons/a b.svg" }\nb.icon: https://example.com/b.svg\na -> b'
   local function key()
     local s = vim.uv.fs_stat(dir .. '/icons/a b.svg')
-    return table.concat({ 'd2', theme.d2_signature, dir, './icons/a b.svg\0' .. s.mtime.sec .. '.' .. s.size, code }, '\0')
+    local d2 = browser.d2_command()
+    local by = d2 and d2.bin .. ' ' .. d2.version or 'bundled'
+    return table.concat({ 'd2', by, theme.d2_signature, dir, './icons/a b.svg\0' .. s.mtime.sec .. '.' .. s.size, code }, '\0')
   end
   local function cached(k) return write_png(cache .. '/' .. vim.fn.sha256(k):sub(1, 32) .. '.png', 300, 100, phys(7559)) end
   local first = cached(key())

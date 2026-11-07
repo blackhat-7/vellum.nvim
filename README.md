@@ -106,7 +106,7 @@ scale instead. They keep their size in the preview but look softer when zoomed.
 
 ## D2
 
-` ```d2 ` blocks render like mermaid, with no extra install. A diagram's own `vars: { d2-config: { ... } }` wins: its `theme-id`, `theme-overrides`, `pad`, `sketch` and `layout-engine` (`elk` too). Icons can be URLs or files; file paths are relative to the markdown file. Markdown, LaTeX and code labels render. Only the main board shows, as with `d2 in.d2 out.png`; `layers`, `scenarios` and `steps` are not drawn. Exports draw D2 in its default light theme.
+` ```d2 ` blocks render like mermaid, with no extra install. If the [`d2`](https://d2lang.com) command is installed, it renders them instead: a newer D2, with your layout plugins (TALA) and `D2_*` settings. `:checkhealth vellum` says which one is used. A diagram's own `vars: { d2-config: { ... } }` wins: its `theme-id`, `theme-overrides`, `pad`, `sketch` and `layout-engine` (`elk` too). Icons can be URLs or files; file paths are relative to the markdown file. Markdown, LaTeX and code labels render. Only the main board shows, as with `d2 in.d2 out.png`; `layers`, `scenarios` and `steps` are not drawn. Exports draw D2 in its default light theme.
 
 ## Supported
 

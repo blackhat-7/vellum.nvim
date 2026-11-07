@@ -1,12 +1,14 @@
 // Headless-browser PNG renderer. Reads one JSON request per stdin line:
 //   {"out": "/abs/file.png", "code": "...", "theme": {...}}   a mermaid diagram
-//   {"out": "/abs/file.png", "d2": "...", "theme": {...}, "dir": "/abs/dir"}   a D2 diagram; local icons resolve in dir
+//   {"out": "/abs/file.png", "d2": "...", "theme": {...}, "dir": "/abs/dir", "bin": "/abs/d2"}   a D2 diagram; local icons
+//     resolve in dir; bin, the user's d2 command, renders it when given
 //   {"out": "/abs/file.png", "image": "/abs/path or https://..."}   any image the browser can show
 //   {"out": "/abs/file.png", "math": "\\frac{a}{b}", "color": "#rrggbb"}   display math, by KaTeX
-//   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir", "kinds": {...}}   a document export
+//   {"out": "/abs/doc.pdf" or ".html", "markdown": "...", "dir": "/abs/dir", "kinds": {...}, "d2bin": "/abs/d2"}   a document export
 // and answers one JSON line: {"out"} when the PNG is written, or {"out", "error"}.
 // A real browser renders exactly what GitHub renders; a fake DOM mis-measures
 // text and breaks class and gantt diagrams.
+import { spawn } from 'node:child_process';
 import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
@@ -93,13 +95,16 @@ const diagram = ({ code, theme }) => page.evaluate(async (code, id, theme) => {
 // D2 compiles to SVG in node (WebAssembly) and loads on the first D2 diagram,
 // so documents without one pay nothing and an older build still draws mermaid.
 // `theme` is { themeID, themeOverrides }; without it, D2's own light theme (exports).
-// Local icon paths resolve in `dir` and go in as data: an about:blank page may not read files.
+// `bin` is the user's d2 command, if any: it renders then, else the bundled D2.
+// Local icon paths resolve in `dir`.
 let d2;
-async function d2svg(code, theme, dir) {
+async function d2svg(code, theme, dir, bin) {
   d2 ??= await import('@terrastruct/d2').then((m) => new m.D2(), (e) => {
     throw new Error('D2 needs a rebuilt renderer (:Vellum build): ' + e.message);
   });
   const r = await d2.compile(code).catch((e) => {
+    // newer syntax than the bundled D2 knows: the d2 command may still take it
+    if (bin) return null;
     // compile errors arrive as JSON: [{"errmsg": "index:3:5: ..."}], index being the source
     let list;
     try { list = JSON.parse(e.message); } catch { throw e; }
@@ -108,9 +113,18 @@ async function d2svg(code, theme, dir) {
   // the diagram's own d2-config wins: its padding, theme or theme-overrides.
   // The padding is the margin mermaid gets from #c; at 0, shapes on the edge
   // lose the outer half of their border
-  const own = r.diagram.config ?? {};
+  const own = r?.diagram.config ?? {};
+  const themed = theme && r && !own.themeID && !r.renderOptions.themeOverrides;
+  if (bin) {
+    // d2's flags would override the diagram's own d2-config, so ours go in as
+    // d2-config after the code, for what it leaves unset; last keeps line numbers
+    const config = {};
+    if (r && own.pad == null) config.pad = 12;
+    if (themed) Object.assign(config, { 'theme-id': theme.themeID, 'theme-overrides': theme.themeOverrides });
+    return d2command(bin, Object.keys(config).length ? `${code}\nvars: { d2-config: ${d2map(config)} }\n` : code, dir);
+  }
   const options = { ...r.renderOptions, pad: own.pad ?? 12, noXMLTag: true };
-  if (theme && !own.themeID && !r.renderOptions.themeOverrides) Object.assign(options, theme);
+  if (themed) Object.assign(options, theme);
   for (const shape of r.diagram.shapes) {
     const icon = shape.icon; // a Go url.URL; data: URLs keep their payload in Opaque
     if (!icon || icon.Scheme || !dir) continue;
@@ -122,10 +136,32 @@ async function d2svg(code, theme, dir) {
   return d2.render(r.diagram, options);
 }
 
-const d2diagram = async ({ d2: code, theme, dir }) => {
+// An object as a D2 map: { pad: 12; theme-overrides: { N1: "#000000" } }
+const d2map = (o) => `{ ${Object.entries(o).map(([k, v]) => `${k}: ${typeof v === 'object' ? d2map(v) : JSON.stringify(v)}`).join('; ')} }`;
+
+// D2 source → SVG with the d2 command, in `dir` so relative icons resolve; it
+// bundles icons into the SVG. Its errors read "err: failed to compile -: -:3:5: ...".
+function d2command(bin, source, dir) {
+  return new Promise((done, fail) => {
+    const p = spawn(bin, ['--no-xml-tag', '-', '-'], { cwd: dir, timeout: 30000 });
+    const out = [], err = [];
+    p.stdout.on('data', (b) => out.push(b));
+    p.stderr.on('data', (b) => err.push(b));
+    p.on('error', fail);
+    p.on('close', (code, signal) => {
+      if (code === 0) return done(Buffer.concat(out).toString());
+      const lines = Buffer.concat(err).toString().split('\n').filter((l) => l.startsWith('err: '));
+      fail(new Error(signal ? 'd2 took longer than 30 s'
+        : lines.map((l) => l.slice(5).replace(/^failed to compile -: -:/, 'line ')).join('\n') || `d2 exited with ${code}`));
+    });
+    p.stdin.end(source);
+  });
+}
+
+const d2diagram = async ({ d2: code, theme, dir, bin }) => {
   let svg;
   try {
-    svg = await d2svg(code, theme, dir);
+    svg = await d2svg(code, theme, dir, bin);
   } catch (e) {
     return String(e?.message ?? e).slice(0, 600);
   }
@@ -247,7 +283,7 @@ img, .mermaid svg, .diagram svg { max-width: 100%; }
 pre, table, img, .mermaid, .diagram, .katex-display { break-inside: avoid; }
 `;
 
-async function exportDoc({ markdown: text, dir, out, kinds }) {
+async function exportDoc({ markdown: text, dir, out, kinds, d2bin }) {
   markdown ??= await exporter().catch((e) => {
     throw new Error('export needs a rebuilt renderer (:Vellum build): ' + e.message);
   });
@@ -300,7 +336,7 @@ async function exportDoc({ markdown: text, dir, out, kinds }) {
     const sources = await doc.$$eval('pre > code.language-d2', (codes) => codes.map((c) => c.textContent));
     if (sources.length) {
       const svgs = [];
-      for (const code of sources) svgs.push(await d2svg(code, undefined, dir).catch(() => null));
+      for (const code of sources) svgs.push(await d2svg(code, undefined, dir, d2bin).catch(() => null));
       await doc.evaluate(async (svgs) => {
         const codes = [...document.querySelectorAll('pre > code.language-d2')];
         svgs.forEach((svg, i) => {

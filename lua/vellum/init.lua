@@ -98,10 +98,11 @@ end
 
 -- tab mode puts the focus, and its window pins the buffer, where Tab keys the user
 -- associates with moving around must move tab pages; their own bindings return on close
+local TAB_KEYS = { ['<Tab>'] = 'tabnext', gt = 'tabnext', ['<S-Tab>'] = 'tabprevious' }
 local function tabkeys(buf)
-  vim.keymap.set('n', '<Tab>', '<Cmd>tabnext<cr>', { buffer = buf, desc = 'Next tab page' })
-  vim.keymap.set('n', 'gt', '<Cmd>tabnext<cr>', { buffer = buf, desc = 'Next tab page' })
-  vim.keymap.set('n', '<S-Tab>', '<Cmd>tabprevious<cr>', { buffer = buf, desc = 'Previous tab page' })
+  for key, cmd in pairs(TAB_KEYS) do
+    vim.keymap.set('n', key, '<Cmd>' .. cmd .. '<cr>', { buffer = buf, desc = cmd == 'tabnext' and 'Next tab page' or 'Previous tab page' })
+  end
 end
 
 local function draw()
@@ -131,6 +132,7 @@ browser.on_update = update
 -- (and re-placing every image in the terminal) makes the drag lag, so draw
 -- once it settles.
 local settle = vim.uv.new_timer()
+local replace = vim.uv.new_timer() -- its own: a shared one would cancel a pending resize redraw
 local function resized()
   if vim.tbl_contains(vim.v.event.windows, S.win) then settle:start(80, 0, vim.schedule_wrap(draw)) end
 end
@@ -224,13 +226,13 @@ function M.open()
     if ev.buf == S.buf then
       -- tabbing away overwrote the screen, and kitty placements do not re-anchor to text
       -- reprinted on the way back: re-place what is on screen once this window has redrawn
-      settle:start(100, 0, vim.schedule_wrap(function()
+      replace:start(100, 0, vim.schedule_wrap(function()
         if not valid() then return end
         local again = {}
         for _, row in pairs(S.rows) do
           for _, m in ipairs(row) do
-            local id = m[3] and tonumber((m[3]:match('Img(%d+)')))
-            if id and image.paths[id] and not again[id] then
+            local id = image.id_of(m[3])
+            if id and not again[id] then
               again[id] = true
               image.resend(id)
             end
@@ -286,9 +288,10 @@ end
 function M.close()
   api.nvim_clear_autocmds({ group = group })
   settle:stop()
+  replace:stop()
   for _, buf in ipairs({ S.buf, S.src }) do
     if buf and api.nvim_buf_is_valid(buf) then
-      for _, key in ipairs({ '<Tab>', 'gt', '<S-Tab>' }) do
+      for key in pairs(TAB_KEYS) do
         pcall(vim.keymap.del, 'n', key, { buffer = buf })
       end
     end
@@ -324,8 +327,8 @@ end
 function M.zoom()
   if not valid() then return end
   for _, m in ipairs(S.rows[api.nvim_win_get_cursor(S.win)[1]] or {}) do
-    local id = tonumber(m[3]:match('Img(%d+)'))
-    if id and image.paths[id] then return zoom.open(image.paths[id]) end
+    local id = image.id_of(m[3])
+    if id then return zoom.open(image.paths[id]) end
   end
   vim.notify('vellum: no image on this line', vim.log.levels.INFO)
 end

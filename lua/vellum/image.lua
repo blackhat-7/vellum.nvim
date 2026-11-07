@@ -157,6 +157,12 @@ function M.id(key)
   return id == 0 and 1 or id
 end
 
+-- The id of the image behind highlight group `group` (made by grid), or nil.
+function M.id_of(group)
+  local id = tonumber((group:match('Img(%d+)')))
+  return M.paths[id] and id
+end
+
 -- Placeholder lines showing rows r0..r0+nr-1 and columns c0..c0+nc-1 (from 0)
 -- of `path` placed in a cols x rows box as image `id`, as segment lines.
 function M.grid(id, path, cols, rows, r0, c0, nr, nc)

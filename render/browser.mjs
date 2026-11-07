@@ -18,7 +18,9 @@ const SCALE = 2; // device pixels per CSS px; kitty downsamples, so text stays c
 const VIEWPORT = { width: 800, height: 800 };
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.avif': 'image/avif' };
 
-const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox'] }).catch((e) => {
+// No font hinting: on Linux it rounds every glyph's advance to whole pixels,
+// so text came out wider than D2 laid it out (code overflowed its boxes)
+const browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox', '--font-render-hinting=none'] }).catch((e) => {
   // one short last line: the plugin shows it in place of each diagram
   console.error('cannot start the browser (run :Vellum build): ' + String(e.message).split('\n')[0]);
   process.exit(1);
@@ -103,9 +105,11 @@ async function d2svg(code, theme, dir) {
     try { list = JSON.parse(e.message); } catch { throw e; }
     throw new Error(list.map((x) => x.errmsg.replace(/^index:/, 'line ')).join('\n'));
   });
-  // the diagram's own d2-config wins: its padding, theme or theme-overrides
+  // the diagram's own d2-config wins: its padding, theme or theme-overrides.
+  // The padding is the margin mermaid gets from #c; at 0, shapes on the edge
+  // lose the outer half of their border
   const own = r.diagram.config ?? {};
-  const options = { ...r.renderOptions, pad: own.pad ?? 0, noXMLTag: true };
+  const options = { ...r.renderOptions, pad: own.pad ?? 12, noXMLTag: true };
   if (theme && !own.themeID && !r.renderOptions.themeOverrides) Object.assign(options, theme);
   for (const shape of r.diagram.shapes) {
     const icon = shape.icon; // a Go url.URL; data: URLs keep their payload in Opaque
@@ -308,7 +312,7 @@ async function exportDoc({ markdown: text, dir, out, kinds }) {
           const [, , w, h] = s.getAttribute('viewBox').split(/[\s,]+/);
           s.setAttribute('width', w);
           s.setAttribute('height', h);
-          codes[i].parentElement.replaceWith(box);
+                codes[i].parentElement.replaceWith(box);
         });
         await document.fonts.ready;
       }, svgs);
@@ -377,8 +381,8 @@ function withDensity(png, scale) {
 
 async function render(req) {
   if (req.markdown != null) return exportDoc(req);
-  // diagrams keep the container's padding; images and math are shot at their own size
-  const [draw, shot] = req.image ? [picture, '#c img'] : req.math != null ? [formula, '#m'] : req.d2 != null ? [d2diagram, '#c'] : [diagram, '#c'];
+  // mermaid keeps the container's padding; D2 pads itself; images and math are shot at their own size
+  const [draw, shot] = req.image ? [picture, '#c img'] : req.math != null ? [formula, '#m'] : req.d2 != null ? [d2diagram, '#c > svg'] : [diagram, '#c'];
   const error = await draw(req);
   if (error) return { out: req.out, error };
   const element = await page.$(shot);

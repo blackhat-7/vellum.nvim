@@ -13,14 +13,18 @@ local M = {}
 local last_diagram = {} -- source row → last ready diagram, shown while an edit re-renders
 
 -- A loader that flashes for a fast render looks worse than none, so it shows
--- only once the wait is noticeable. M.wake: ms until the next one is due, for
--- the preview to draw again then (init.lua); nil when none is.
+-- only once the wait is noticeable. The preview resets these before a draw and
+-- reads them after (init.lua): M.loading, a loader is shown, so it turns the
+-- spinner; M.due, the vim.uv.now() when the next one is due, to draw again then.
+M.SPINNER = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
 local SPINNER_AFTER, BADGE_AFTER = 400, 1000
-M.wake = nil
 
 local function due(elapsed, after)
-  if elapsed >= after then return true end
-  M.wake = math.min(M.wake or math.huge, after - elapsed)
+  if elapsed >= after then
+    M.loading = true
+    return true
+  end
+  M.due = math.min(M.due or math.huge, vim.uv.now() + after - elapsed)
   return false
 end
 
@@ -100,19 +104,12 @@ function M.diagram(code, width, row, lang)
   local last = last_diagram[row]
   if not last then
     if not due(a, SPINNER_AFTER) then return M.panel(code, lang, width) end
-    local out = M.panel(code, lang, width, '⠋ rendering…')
+    local out = M.panel(code, lang, width, M.SPINNER[1] .. ' rendering…')
     out[1][2][2] = 'VellumSpinner' -- the preview turns its first glyph (init.lua)
     return out
   end
-  if not due(a, BADGE_AFTER) then return last end
-  -- the old picture stays while an edit renders, with an 'updating' badge over
-  -- its top-right cells. Only trailing cells may be covered: kitty places each
-  -- bare cell after the first by counting from the cell before it.
-  local pad, cells, ph = last[1][1], last[1][2], image.placeholder
-  local n = math.min(12, select(2, cells[1]:gsub(ph, '')) - 1)
-  if n < 1 then return last end
-  local top = { pad, { cells[1], cells[2], { { #cells[1] - n * #ph, #cells[1], 'VellumBadge' } } } }
-  return { top, unpack(last, 2) }
+  -- an edit keeps the old picture, badged once the wait is noticeable
+  return due(a, BADGE_AFTER) and media.badge(last, ' ' .. M.SPINNER[1] .. ' updating ') or last
 end
 
 return M

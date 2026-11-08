@@ -41,18 +41,17 @@ local send -- below; a restarted renderer resends through it
 M.idle_ms = 300000
 local idle = vim.uv.new_timer()
 
-local function stop()
-  local j = job
-  job = nil -- its exit is not a crash: the exit callback below ignores it
-  j:write(nil) -- closing stdin makes browser.mjs close Chrome and exit
-end
+local function idle_now() return job and not next(pending) and not next(exports) end
+
+-- checked again when the timer fires: a request may have come in since
+local stop_if_idle = vim.schedule_wrap(function()
+  if not idle_now() then return end
+  job:write(nil) -- closing stdin makes browser.mjs close Chrome and exit
+  job = nil -- so the exit callback below does not take it for a crash
+end)
 
 local function stop_when_idle()
-  if job and not next(pending) and not next(exports) then
-    idle:start(M.idle_ms, 0, vim.schedule_wrap(function()
-      if job and not next(pending) and not next(exports) then stop() end
-    end))
-  end
+  if idle_now() then idle:start(M.idle_ms, 0, stop_if_idle) end
 end
 
 -- True while a picture is being rendered.
@@ -66,8 +65,8 @@ function M.start()
   if not vim.uv.fs_stat(root .. '/node_modules') then return 'renderer not built: run :Vellum build' end
   vim.fn.mkdir(dir, 'p')
   local partial, stderr, answered = '', '', false
-  local proc
-  local ok, started = pcall(vim.system, { 'node', root .. '/browser.mjs' }, {
+  local ok, proc
+  ok, proc = pcall(vim.system, { 'node', root .. '/browser.mjs' }, {
     -- puppeteer reads its config (.puppeteerrc.*) from the working directory:
     -- render/.puppeteerrc.cjs applies (Nix names its browser there), a user's project one does not
     cwd = root,
@@ -116,8 +115,8 @@ function M.start()
       M.on_update()
     end)
   end)
-  if not ok then return 'cannot start node: ' .. tostring(started) end
-  proc, job = started, started
+  if not ok then return 'cannot start node: ' .. tostring(proc) end
+  job = proc
 end
 
 -- Queue a render, starting the renderer if needed. Returns an error message, or nil.

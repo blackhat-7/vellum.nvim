@@ -27,6 +27,17 @@ function M.picture(file, pw, ph, width, density)
   return out
 end
 
+-- Picture `lines` from M.picture with `text` over the right end of its top
+-- row; `lines` itself when the picture is too narrow. Only trailing cells can
+-- go: kitty places each bare cell after the first by counting from the one before.
+function M.badge(lines, text)
+  local pad, cells, ph = lines[1][1], lines[1][2], image.placeholder
+  local w = vim.api.nvim_strwidth(text)
+  if select(2, cells[1]:gsub(ph, '')) <= w then return lines end
+  local top = { pad, { cells[1]:sub(1, #cells[1] - w * #ph), cells[2] }, { text, 'VellumBadge' } }
+  return { top, unpack(lines, 2) }
+end
+
 -- The PNG showing image `src` (local path or http(s) URL): file, width,
 -- height, density. Nil while it renders or when it cannot be shown.
 local function load(src)

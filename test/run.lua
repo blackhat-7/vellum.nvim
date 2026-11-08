@@ -521,13 +521,16 @@ do
   -- a fast render shows no loader, and the preview is told when one is due
   browser.diagram = function() return 'pending', 100 end
   local quick = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
-  check('fast new diagram has no spinner', quick[1][2][2] == 'VellumCodeLabel' and code.wake == 300, vim.inspect(quick[1]) .. ' ' .. tostring(code.wake))
-  code.wake = nil
+  local due_in = code.due and code.due - vim.uv.now()
+  check('fast new diagram has no spinner', quick[1][2][2] == 'VellumCodeLabel' and due_in and due_in > 250 and due_in <= 300 and not code.loading,
+    vim.inspect(quick[1]) .. ' ' .. tostring(due_in))
+  code.due = nil
   browser.diagram = function() return 'pending', 5000 end
   local out = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
   local head = out[1]
   local text = table.concat(vim.tbl_map(function(s) return s[1] end, head))
-  check('pending diagram has a spinner label', head[2][1] == '⠋ rendering…' and head[2][2] == 'VellumSpinner', vim.inspect(head))
+  check('pending diagram has a spinner label', head[2][1] == '⠋ rendering…' and head[2][2] == 'VellumSpinner' and code.loading, vim.inspect(head))
+  code.loading = false
   check('spinner label fits the panel', vim.api.nvim_strwidth(text) == 40, text)
   check('pending diagram shows its code', out[2][2][1] == 'graph LR; A --> B')
 
@@ -537,17 +540,16 @@ do
   browser.diagram = function() return 'ready', file, { 400, 100, 1 } end
   local ready = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
   browser.diagram = function() return 'pending', 200 end
-  check('fast edit keeps the picture without a badge', code.diagram('graph LR; A --> C', 40, 99, 'mermaid') == ready and code.wake == 800)
-  code.wake = nil
+  check('fast edit keeps the picture without a badge', code.diagram('graph LR; A --> C', 40, 99, 'mermaid') == ready and code.due and not code.loading)
+  code.due = nil
   browser.diagram = function() return 'pending', 5000 end
   local updating = code.diagram('graph LR; A --> C', 40, 99, 'mermaid')
   browser.diagram, image.supported, vim.o.termguicolors = diagram, supported, tgc
-  local seg, ph = updating[1][2], image.placeholder
-  local mark = seg[3] and seg[3][1]
+  local top, ph = updating[1], image.placeholder
   check('updating picture keeps its rows', #updating == #ready and updating[2] == ready[2])
-  check('updating badge covers trailing cells only', mark and mark[3] == 'VellumBadge' and mark[2] == #seg[1]
-    and seg[1]:sub(mark[1] + 1) == ph:rep(12) and mark[1] > #ph, vim.inspect(mark))
-  check('ready picture has no badge', ready[1][2][3] == nil)
+  check('updating badge replaces trailing cells only', top[3] and top[3][2] == 'VellumBadge' and top[3][1] == ' ⠋ updating '
+    and top[2][1] .. ph:rep(12) == ready[1][2][1], vim.inspect(top[3]))
+  check('ready picture has no badge', #ready[1] == 2)
 end
 
 -- D2: fenced like mermaid; shown as code without image support, else a

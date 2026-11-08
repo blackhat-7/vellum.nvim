@@ -22,20 +22,15 @@ local group = api.nvim_create_augroup('vellum', { clear = true })
 local warned = false -- told the user why images cannot show
 local S = {} -- win, buf: the preview · src: the markdown buffer · rows, margin: highlights · anchors: scroll map
 
--- Diagrams still rendering show a spinner in their label (code.lua).
-local SPINNER = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
+-- Loaders (code.lua) turn by overlaying the current spinner frame on their
+-- glyph and redrawing the screen alone, not the document: the first glyph of a
+-- 'rendering' label, the second cell of an 'updating' badge.
 local frame = 1
 local spin = vim.uv.new_timer()
-local wake = vim.uv.new_timer() -- draws again when a slow render's loader is due
-
--- The spinner text over mark m: the first glyph of a 'rendering' label, or
--- a badge over the cells of a picture being updated (4 bytes per cell).
 local function spinner(m)
-  if m[3] == 'VellumSpinner' then return { { SPINNER[frame], 'VellumSpinner' } } end
-  if m[3] ~= 'VellumBadge' then return nil end
-  local cells = (m[2] - m[1]) / 4
-  local text = cells >= 12 and ' ' .. SPINNER[frame] .. ' updating ' or cells >= 3 and ' ' .. SPINNER[frame] .. ' ' or SPINNER[frame]
-  return { { text, 'VellumBadge' } }
+  local SPINNER = code.SPINNER
+  if m[3] == 'VellumSpinner' then return { { SPINNER[frame], m[3] } } end
+  if m[3] == 'VellumBadge' then return { { ' ' .. SPINNER[frame], m[3] } } end
 end
 
 -- Highlights are applied only to lines being drawn, so a redraw costs the
@@ -47,10 +42,10 @@ api.nvim_set_decoration_provider(ns, {
   end,
   on_line = function(_, _, buf, row)
     for _, m in ipairs(S.rows[row + 1] or {}) do
+      local turning = spinner(m)
       api.nvim_buf_set_extmark(buf, ns, row, m[1] + S.margin, {
         end_col = m[2] + S.margin, hl_group = m[3], priority = m[4], ephemeral = true,
-        -- the spinner turns by redrawing the screen alone, not the document
-        virt_text = spinner(m), virt_text_pos = spinner(m) and 'overlay' or nil,
+        virt_text = turning, virt_text_pos = turning and 'overlay' or nil,
       })
       -- an image is sent to the terminal when a row of it is first drawn
       local id = image.id_of(m[3])
@@ -132,11 +127,12 @@ local function tabkeys(buf)
   end
 end
 
-local update -- below: draw schedules it when a loader is due
+local update -- below: the spin timer draws again when a loader is due
 
 local function draw()
   if not valid() then return end
   local lines, shown
+  code.due, code.loading = nil, false
   lines, S.rows, S.margin, S.anchors, shown = render.render(S.src, api.nvim_win_get_width(S.win), M.config.max_width)
   browser.drop_stale()
   image.keep(shown)
@@ -144,15 +140,14 @@ local function draw()
   api.nvim_buf_set_lines(S.buf, 0, -1, false, lines)
   vim.bo[S.buf].modifiable = false
   sync(true)
-  if code.wake then
-    wake:start(code.wake, 0, vim.schedule_wrap(update))
-    code.wake = nil
-  end
   if browser.busy() and not spin:is_active() then
     spin:start(100, 100, vim.schedule_wrap(function()
       if not valid() or not browser.busy() then return spin:stop() end
-      frame = frame % #SPINNER + 1
-      api.nvim__redraw({ win = S.win, valid = false })
+      if code.due and vim.uv.now() >= code.due then return update() end
+      if code.loading then
+        frame = frame % #code.SPINNER + 1
+        api.nvim__redraw({ win = S.win, valid = false })
+      end
     end))
   end
 end
@@ -330,7 +325,6 @@ function M.close()
   settle:stop()
   replace:stop()
   spin:stop()
-  wake:stop()
   for _, buf in ipairs({ S.buf, S.src }) do
     if buf and api.nvim_buf_is_valid(buf) then
       for key in pairs(TAB_KEYS) do

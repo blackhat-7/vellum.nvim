@@ -53,8 +53,11 @@ function M.apply()
   set('Code', { fg = h[5], bg = blend(fg, bg, 0.09) })
   set('Math', { fg = h[6] })
   M.math = hex(h[6]) -- display math pictures match the text shown while they render
-  set('CodeBg', { bg = blend(fg, bg, 0.05) })
-  set('CodeLabel', { fg = muted, bg = blend(fg, bg, 0.05), italic = true })
+  local code_bg = blend(fg, bg, 0.05)
+  set('CodeBg', { bg = code_bg })
+  set('CodeLabel', { fg = muted, bg = code_bg, italic = true })
+  set('Spinner', { fg = h[1], bg = code_bg, bold = true })
+  set('Badge', { fg = bg, bg = h[1], bold = true })
   set('Link', { fg = h[1], underline = true, sp = blend(h[1], bg, 0.5) })
   set('Mark', { fg = fg, bg = blend(warn, bg, 0.3) }) -- ==highlight==
   set('Bullet', { fg = h[1], bold = true })

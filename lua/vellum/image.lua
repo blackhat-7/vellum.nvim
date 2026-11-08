@@ -33,6 +33,7 @@ local DIACRITICS = {
 }
 
 local PLACEHOLDER = vim.fn.nr2char(0x10EEEE)
+M.placeholder = PLACEHOLDER
 M.max_cells = #DIACRITICS -- per row and per column
 
 -- Which terminal draws the images, and whether it can. Inside tmux (often

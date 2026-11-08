@@ -512,6 +512,47 @@ do
   check('capped diagram keeps its width', cols(wide) == cols(narrow), cols(wide) .. ' vs ' .. cols(narrow))
 end
 
+-- render loaders: none while a render is fast; then a spinner label over a new
+-- diagram's code, or a badge over an edited diagram's old picture
+do
+  local browser, code = require('vellum.browser'), require('vellum.code')
+  local diagram, supported, tgc = browser.diagram, image.supported, vim.o.termguicolors
+  image.supported, vim.o.termguicolors = true, true
+  code.reset()
+  -- a fast render shows no loader, and the preview is told when one is due
+  browser.diagram = function() return 'pending', 100 end
+  local quick = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
+  local due_in = code.due and code.due - vim.uv.now()
+  check('fast new diagram has no spinner', quick[1][2][2] == 'VellumCodeLabel' and due_in and due_in > 250 and due_in <= 300 and not code.loading,
+    vim.inspect(quick[1]) .. ' ' .. tostring(due_in))
+  code.due = nil
+  browser.diagram = function() return 'pending', 5000 end
+  local out = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
+  local head = out[1]
+  local text = table.concat(vim.tbl_map(function(s) return s[1] end, head))
+  check('pending diagram has a spinner label', head[2][1] == '⠋ rendering…' and head[2][2] == 'VellumSpinner' and code.loading, vim.inspect(head))
+  code.loading = false
+  check('spinner label fits the panel', vim.api.nvim_strwidth(text) == 40, text)
+  check('pending diagram shows its code', out[2][2][1] == 'graph LR; A --> B')
+
+  -- an edit keeps the old picture, with a badge over the last 12 cells of its top row
+  local file = vim.fn.tempname() .. '.png'
+  write_png(file, 400, 100)
+  browser.diagram = function() return 'ready', file, { 400, 100, 1 } end
+  local ready = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
+  browser.diagram = function() return 'pending', 200 end
+  check('fast edit keeps the picture without a badge', code.diagram('graph LR; A --> C', 40, 99, 'mermaid') == ready and code.due and not code.loading)
+  code.due = nil
+  browser.diagram = function() return 'pending', 5000 end
+  local updating = code.diagram('graph LR; A --> C', 40, 99, 'mermaid')
+  browser.diagram, image.supported, vim.o.termguicolors = diagram, supported, tgc
+  local top, ph = updating[1], image.placeholder
+  check('updating picture keeps its rows', #updating == #ready and updating[2] == ready[2])
+  check('updating badge replaces trailing cells only', top[3] and top[3][2] == 'VellumBadge' and top[3][1] == ' ⠋ updating '
+    and top[2][1] .. ph:rep(12) == ready[1][2][1], vim.inspect(top[3]))
+  check('ready picture has no badge', #ready[1] == 2)
+end
+
 -- D2: fenced like mermaid; shown as code without image support, else a
 -- picture keyed by theme, folder, local icon versions and code
 do

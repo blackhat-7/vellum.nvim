@@ -12,6 +12,22 @@ local M = {}
 
 local last_diagram = {} -- source row → last ready diagram, shown while an edit re-renders
 
+-- A loader that flashes for a fast render looks worse than none, so it shows
+-- only once the wait is noticeable. The preview resets these before a draw and
+-- reads them after (init.lua): M.loading, a loader is shown, so it turns the
+-- spinner; M.due, the vim.uv.now() when the next one is due, to draw again then.
+M.SPINNER = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
+local SPINNER_AFTER, BADGE_AFTER = 400, 1000
+
+local function due(elapsed, after)
+  if elapsed >= after then
+    M.loading = true
+    return true
+  end
+  M.due = math.min(M.due or math.huge, vim.uv.now() + after - elapsed)
+  return false
+end
+
 function M.reset() last_diagram = {} end
 
 -- Syntax highlight ranges per 0-based row: { { start, end, group }, ... }.
@@ -85,7 +101,15 @@ function M.diagram(code, width, row, lang)
   elseif state == 'error' then
     return M.panel(code, lang, width, nil, a)
   end
-  return last_diagram[row] or M.panel(code, lang, width, 'rendering…')
+  local last = last_diagram[row]
+  if not last then
+    if not due(a, SPINNER_AFTER) then return M.panel(code, lang, width) end
+    local out = M.panel(code, lang, width, M.SPINNER[1] .. ' rendering…')
+    out[1][2][2] = 'VellumSpinner' -- the preview turns its first glyph (init.lua)
+    return out
+  end
+  -- an edit keeps the old picture, badged once the wait is noticeable
+  return due(a, BADGE_AFTER) and media.badge(last, ' ' .. M.SPINNER[1] .. ' updating ') or last
 end
 
 return M

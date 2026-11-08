@@ -7,6 +7,7 @@ local browser = require('vellum.browser')
 local zoom = require('vellum.zoom')
 local links = require('vellum.links')
 local mdx = require('vellum.mdx')
+local code = require('vellum.code')
 
 local api = vim.api
 local M = {}
@@ -21,6 +22,16 @@ local group = api.nvim_create_augroup('vellum', { clear = true })
 local warned = false -- told the user why images cannot show
 local S = {} -- win, buf: the preview · src: the markdown buffer · rows, margin: highlights · anchors: scroll map
 
+-- Loaders (code.lua) turn by overlaying the current spinner frame on their
+-- glyph and redrawing the screen alone, not the document: the first glyph of a
+-- 'rendering' label, the second cell of an 'updating' badge.
+local frame = 1
+local spin = vim.uv.new_timer()
+local function spinner(m)
+  if m[3] == 'VellumSpinner' then return { { code.SPINNER[frame], m[3] } } end
+  if m[3] == 'VellumBadge' then return { { ' ' .. code.SPINNER[frame], m[3] } } end
+end
+
 -- Highlights are applied only to lines being drawn, so a redraw costs the
 -- same for a 50-line and a 5,000-line document.
 api.nvim_set_decoration_provider(ns, {
@@ -30,8 +41,10 @@ api.nvim_set_decoration_provider(ns, {
   end,
   on_line = function(_, _, buf, row)
     for _, m in ipairs(S.rows[row + 1] or {}) do
+      local turning = spinner(m)
       api.nvim_buf_set_extmark(buf, ns, row, m[1] + S.margin, {
         end_col = m[2] + S.margin, hl_group = m[3], priority = m[4], ephemeral = true,
+        virt_text = turning, virt_text_pos = turning and 'overlay' or nil,
       })
       -- an image is sent to the terminal when a row of it is first drawn
       local id = image.id_of(m[3])
@@ -113,9 +126,12 @@ local function tabkeys(buf)
   end
 end
 
+local update -- below: the spin timer draws again when a loader is due
+
 local function draw()
   if not valid() then return end
   local lines, shown
+  code.due, code.loading = nil, false
   lines, S.rows, S.margin, S.anchors, shown = render.render(S.src, api.nvim_win_get_width(S.win), M.config.max_width)
   browser.drop_stale()
   image.keep(shown)
@@ -123,11 +139,21 @@ local function draw()
   api.nvim_buf_set_lines(S.buf, 0, -1, false, lines)
   vim.bo[S.buf].modifiable = false
   sync(true)
+  if browser.busy() and not spin:is_active() then
+    spin:start(100, 100, vim.schedule_wrap(function()
+      if not valid() or not browser.busy() then return spin:stop() end
+      if code.due and vim.uv.now() >= code.due then return update() end
+      if code.loading then
+        frame = frame % #code.SPINNER + 1
+        api.nvim__redraw({ win = S.win, valid = false })
+      end
+    end))
+  end
 end
 
 -- Coalesce bursts of events into one draw on the next tick.
 local queued = false
-local function update()
+function update()
   if queued then return end
   queued = true
   vim.schedule(function()
@@ -217,7 +243,6 @@ function M.open()
     tabkeys(S.src)
   end
   theme.apply()
-  if image.supported and not image.problem() then browser.start() end
   -- The preview falls back to text on its own; say why, once a session.
   local why = not image.supported and "this terminal can't show images (kitty and Ghostty can), so diagrams show as code"
     or image.problem()
@@ -298,6 +323,7 @@ function M.close()
   api.nvim_clear_autocmds({ group = group })
   settle:stop()
   replace:stop()
+  spin:stop()
   for _, buf in ipairs({ S.buf, S.src }) do
     if buf and api.nvim_buf_is_valid(buf) then
       for key in pairs(TAB_KEYS) do

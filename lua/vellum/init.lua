@@ -26,6 +26,16 @@ local SPINNER = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇',
 local frame = 1
 local spin = vim.uv.new_timer()
 
+-- The spinner text over mark m: the first glyph of a 'rendering' label, or
+-- a badge over the cells of a picture being updated (4 bytes per cell).
+local function spinner(m)
+  if m[3] == 'VellumSpinner' then return { { SPINNER[frame], 'VellumSpinner' } } end
+  if m[3] ~= 'VellumBadge' then return nil end
+  local cells = (m[2] - m[1]) / 4
+  local text = cells >= 12 and ' ' .. SPINNER[frame] .. ' updating ' or cells >= 3 and ' ' .. SPINNER[frame] .. ' ' or SPINNER[frame]
+  return { { text, 'VellumBadge' } }
+end
+
 -- Highlights are applied only to lines being drawn, so a redraw costs the
 -- same for a 50-line and a 5,000-line document.
 api.nvim_set_decoration_provider(ns, {
@@ -38,8 +48,7 @@ api.nvim_set_decoration_provider(ns, {
       api.nvim_buf_set_extmark(buf, ns, row, m[1] + S.margin, {
         end_col = m[2] + S.margin, hl_group = m[3], priority = m[4], ephemeral = true,
         -- the spinner turns by redrawing the screen alone, not the document
-        virt_text = m[3] == 'VellumSpinner' and { { SPINNER[frame], 'VellumSpinner' } } or nil,
-        virt_text_pos = m[3] == 'VellumSpinner' and 'overlay' or nil,
+        virt_text = spinner(m), virt_text_pos = spinner(m) and 'overlay' or nil,
       })
       -- an image is sent to the terminal when a row of it is first drawn
       local id = image.id_of(m[3])

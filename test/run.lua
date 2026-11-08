@@ -520,12 +520,26 @@ do
   image.supported, vim.o.termguicolors = true, true
   code.reset()
   local out = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
-  browser.diagram, image.supported, vim.o.termguicolors = diagram, supported, tgc
   local head = out[1]
   local text = table.concat(vim.tbl_map(function(s) return s[1] end, head))
-  check('pending diagram has a spinner', head[2][1] == '⠋' and head[2][2] == 'VellumSpinner', vim.inspect(head))
-  check('spinner label fits the panel', vim.api.nvim_strwidth(text) == 40 and text:find('rendering…', 1, true) ~= nil, text)
+  check('pending diagram has a spinner label', head[2][1] == '⠋ rendering…' and head[2][2] == 'VellumSpinner', vim.inspect(head))
+  check('spinner label fits the panel', vim.api.nvim_strwidth(text) == 40, text)
   check('pending diagram shows its code', out[2][2][1] == 'graph LR; A --> B')
+
+  -- an edit keeps the old picture, with a badge over the last 12 cells of its top row
+  local file = vim.fn.tempname() .. '.png'
+  write_png(file, 400, 100)
+  browser.diagram = function() return 'ready', file, { 400, 100, 1 } end
+  local ready = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
+  browser.diagram = function() return 'pending' end
+  local updating = code.diagram('graph LR; A --> C', 40, 99, 'mermaid')
+  browser.diagram, image.supported, vim.o.termguicolors = diagram, supported, tgc
+  local seg, ph = updating[1][2], image.placeholder
+  local mark = seg[3] and seg[3][1]
+  check('updating picture keeps its rows', #updating == #ready and updating[2] == ready[2])
+  check('updating badge covers trailing cells only', mark and mark[3] == 'VellumBadge' and mark[2] == #seg[1]
+    and seg[1]:sub(mark[1] + 1) == ph:rep(12) and mark[1] > #ph, vim.inspect(mark))
+  check('ready picture has no badge', ready[1][2][3] == nil)
 end
 
 -- D2: fenced like mermaid; shown as code without image support, else a

@@ -85,13 +85,20 @@ function M.diagram(code, width, row, lang)
   elseif state == 'error' then
     return M.panel(code, lang, width, nil, a)
   end
-  if last_diagram[row] then return last_diagram[row] end
-  local out = M.panel(code, lang, width, '⠋ rendering…')
-  -- the first glyph is the spinner, turned by the preview (init.lua)
-  local label = out[1][2][1]
-  out[1][2] = { label:sub(1, #'⠋'), 'VellumSpinner' }
-  table.insert(out[1], 3, { label:sub(#'⠋' + 1), 'VellumCodeLabel' })
-  return out
+  local last = last_diagram[row]
+  if not last then
+    local out = M.panel(code, lang, width, '⠋ rendering…')
+    out[1][2][2] = 'VellumSpinner' -- the preview turns its first glyph (init.lua)
+    return out
+  end
+  -- the old picture stays while an edit renders, with an 'updating' badge over
+  -- its top-right cells. Only trailing cells may be covered: kitty places each
+  -- bare cell after the first by counting from the cell before it.
+  local pad, cells, ph = last[1][1], last[1][2], image.placeholder
+  local n = math.min(12, select(2, cells[1]:gsub(ph, '')) - 1)
+  if n < 1 then return last end
+  local top = { pad, { cells[1], cells[2], { { #cells[1] - n * #ph, #cells[1], 'VellumBadge' } } } }
+  return { top, unpack(last, 2) }
 end
 
 return M

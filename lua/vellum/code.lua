@@ -85,7 +85,13 @@ function M.diagram(code, width, row, lang)
   elseif state == 'error' then
     return M.panel(code, lang, width, nil, a)
   end
-  return last_diagram[row] or M.panel(code, lang, width, 'rendering…')
+  if last_diagram[row] then return last_diagram[row] end
+  local out = M.panel(code, lang, width, '⠋ rendering…')
+  -- the first glyph is the spinner, turned by the preview (init.lua)
+  local label = out[1][2][1]
+  out[1][2] = { label:sub(1, #'⠋'), 'VellumSpinner' }
+  table.insert(out[1], 3, { label:sub(#'⠋' + 1), 'VellumCodeLabel' })
+  return out
 end
 
 return M

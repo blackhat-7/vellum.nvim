@@ -21,6 +21,11 @@ local group = api.nvim_create_augroup('vellum', { clear = true })
 local warned = false -- told the user why images cannot show
 local S = {} -- win, buf: the preview · src: the markdown buffer · rows, margin: highlights · anchors: scroll map
 
+-- Diagrams still rendering show a spinner in their label (code.lua).
+local SPINNER = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
+local frame = 1
+local spin = vim.uv.new_timer()
+
 -- Highlights are applied only to lines being drawn, so a redraw costs the
 -- same for a 50-line and a 5,000-line document.
 api.nvim_set_decoration_provider(ns, {
@@ -32,6 +37,9 @@ api.nvim_set_decoration_provider(ns, {
     for _, m in ipairs(S.rows[row + 1] or {}) do
       api.nvim_buf_set_extmark(buf, ns, row, m[1] + S.margin, {
         end_col = m[2] + S.margin, hl_group = m[3], priority = m[4], ephemeral = true,
+        -- the spinner turns by redrawing the screen alone, not the document
+        virt_text = m[3] == 'VellumSpinner' and { { SPINNER[frame], 'VellumSpinner' } } or nil,
+        virt_text_pos = m[3] == 'VellumSpinner' and 'overlay' or nil,
       })
       -- an image is sent to the terminal when a row of it is first drawn
       local id = image.id_of(m[3])
@@ -123,6 +131,13 @@ local function draw()
   api.nvim_buf_set_lines(S.buf, 0, -1, false, lines)
   vim.bo[S.buf].modifiable = false
   sync(true)
+  if browser.busy() and not spin:is_active() then
+    spin:start(100, 100, vim.schedule_wrap(function()
+      if not valid() or not browser.busy() then return spin:stop() end
+      frame = frame % #SPINNER + 1
+      api.nvim__redraw({ win = S.win, valid = false })
+    end))
+  end
 end
 
 -- Coalesce bursts of events into one draw on the next tick.
@@ -217,7 +232,6 @@ function M.open()
     tabkeys(S.src)
   end
   theme.apply()
-  if image.supported and not image.problem() then browser.start() end
   -- The preview falls back to text on its own; say why, once a session.
   local why = not image.supported and "this terminal can't show images (kitty and Ghostty can), so diagrams show as code"
     or image.problem()
@@ -298,6 +312,7 @@ function M.close()
   api.nvim_clear_autocmds({ group = group })
   settle:stop()
   replace:stop()
+  spin:stop()
   for _, buf in ipairs({ S.buf, S.src }) do
     if buf and api.nvim_buf_is_valid(buf) then
       for key in pairs(TAB_KEYS) do

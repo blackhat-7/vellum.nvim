@@ -35,16 +35,39 @@ prune()
 
 local send -- below; a restarted renderer resends through it
 
--- Start the renderer, if it is not running. Loading Chrome and mermaid takes
--- ~0.7 s, so the preview starts it on open rather than on the first diagram.
--- Returns an error message, or nil.
+-- Chrome holds 100-200 MB, so it runs only while there is work: it stops
+-- after a minute with nothing to render, and the next uncached picture
+-- starts it again (~0.6 s).
+M.idle_ms = 60000
+local idle = vim.uv.new_timer()
+
+local function stop()
+  local j = job
+  job = nil -- its exit is not a crash: the exit callback below ignores it
+  j:write(nil) -- closing stdin makes browser.mjs close Chrome and exit
+end
+
+local function stop_when_idle()
+  if job and not next(pending) and not next(exports) then
+    idle:start(M.idle_ms, 0, vim.schedule_wrap(function()
+      if job and not next(pending) and not next(exports) then stop() end
+    end))
+  end
+end
+
+-- True while a picture is being rendered.
+function M.busy() return next(pending) ~= nil end
+
+-- Start the renderer, if it is not running. Returns an error message, or nil.
 function M.start()
+  idle:stop()
   if job then return end
   if vim.fn.executable('node') == 0 then return 'node not found: diagrams need Node.js 20.6 or newer' end
   if not vim.uv.fs_stat(root .. '/node_modules') then return 'renderer not built: run :Vellum build' end
   vim.fn.mkdir(dir, 'p')
   local partial, stderr, answered = '', '', false
-  local ok, proc = pcall(vim.system, { 'node', root .. '/browser.mjs' }, {
+  local proc
+  local ok, started = pcall(vim.system, { 'node', root .. '/browser.mjs' }, {
     -- puppeteer reads its config (.puppeteerrc.*) from the working directory:
     -- render/.puppeteerrc.cjs applies (Nix names its browser there), a user's project one does not
     cwd = root,
@@ -69,11 +92,13 @@ function M.start()
             end
           end
         end
+        stop_when_idle()
       end)
     end,
     stderr = function(_, data) stderr = (stderr .. (data or '')):sub(-500) end,
   }, function()
     vim.schedule(function()
+      if job ~= proc then return end -- stopped on purpose
       job = nil
       for _, finished in pairs(exports) do finished('renderer stopped') end
       exports = {}
@@ -91,8 +116,8 @@ function M.start()
       M.on_update()
     end)
   end)
-  if not ok then return 'cannot start node: ' .. tostring(proc) end
-  job = proc
+  if not ok then return 'cannot start node: ' .. tostring(started) end
+  proc, job = started, started
 end
 
 -- Queue a render, starting the renderer if needed. Returns an error message, or nil.
@@ -142,6 +167,7 @@ function M.drop_stale()
     end
   end
   wanted = {}
+  stop_when_idle()
 end
 
 -- Write req.markdown, whose relative links resolve in req.dir, to req.out: a

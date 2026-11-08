@@ -9,6 +9,7 @@ local root = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h')
 vim.opt.rtp:prepend(root)
 vim.env.XDG_CACHE_HOME = vim.fn.tempname() -- a fresh cache: everything renders
 local browser, theme = require('vellum.browser'), require('vellum.theme')
+browser.idle_ms = 1000 -- checked at the end: an idle renderer stops, and starts again when needed
 theme.apply()
 local failed = 0
 local function fail(msg)
@@ -102,6 +103,18 @@ if count('class="mermaid"') ~= 1 or count('class="diagram"') ~= 1 or count('lang
   fail('export html: mermaid, D2 and broken D2 not as expected')
 end
 if (vim.uv.fs_stat(dir .. '/doc.pdf') or { size = 0 }).size == 0 then fail('export pdf: empty') end
+
+-- idle: the renderer exits, and a new picture starts it again without an error
+local function running()
+  return vim.system({ 'pgrep', '-P', tostring(vim.fn.getpid()), '-f', 'browser.mjs' }):wait().code == 0
+end
+if not vim.wait(10000, function() return not running() end, 100) then fail('idle renderer still running') end
+local state, why
+vim.wait(30000, function()
+  state, why = browser.diagram('graph LR; idle --> again', theme, 'mermaid')
+  return state ~= 'pending'
+end, 50)
+if state ~= 'ready' then fail('render after idle stop: ' .. tostring(state) .. ' ' .. tostring(why)) end
 
 print(('%d pictures and 2 exports in %.1f s, %d failed'):format(#jobs, (vim.uv.hrtime() - t0) / 1e9, failed))
 vim.cmd(failed == 0 and 'qa!' or 'cq!')

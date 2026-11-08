@@ -512,6 +512,22 @@ do
   check('capped diagram keeps its width', cols(wide) == cols(narrow), cols(wide) .. ' vs ' .. cols(narrow))
 end
 
+-- a diagram still rendering shows its code under a spinner label of the panel's width
+do
+  local browser, code = require('vellum.browser'), require('vellum.code')
+  local diagram, supported, tgc = browser.diagram, image.supported, vim.o.termguicolors
+  browser.diagram = function() return 'pending' end
+  image.supported, vim.o.termguicolors = true, true
+  code.reset()
+  local out = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
+  browser.diagram, image.supported, vim.o.termguicolors = diagram, supported, tgc
+  local head = out[1]
+  local text = table.concat(vim.tbl_map(function(s) return s[1] end, head))
+  check('pending diagram has a spinner', head[2][1] == '⠋' and head[2][2] == 'VellumSpinner', vim.inspect(head))
+  check('spinner label fits the panel', vim.api.nvim_strwidth(text) == 40 and text:find('rendering…', 1, true) ~= nil, text)
+  check('pending diagram shows its code', out[2][2][1] == 'graph LR; A --> B')
+end
+
 -- D2: fenced like mermaid; shown as code without image support, else a
 -- picture keyed by theme, folder, local icon versions and code
 do

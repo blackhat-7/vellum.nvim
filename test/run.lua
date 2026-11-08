@@ -512,7 +512,8 @@ do
   check('capped diagram keeps its width', cols(wide) == cols(narrow), cols(wide) .. ' vs ' .. cols(narrow))
 end
 
--- a diagram still rendering shows its code under a spinner label of the panel's width
+-- render loaders: none while a render is fast; then a spinner label over a new
+-- diagram's code, or a badge over an edited diagram's old picture
 do
   local browser, code = require('vellum.browser'), require('vellum.code')
   local diagram, supported, tgc = browser.diagram, image.supported, vim.o.termguicolors

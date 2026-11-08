@@ -28,9 +28,8 @@ local S = {} -- win, buf: the preview · src: the markdown buffer · rows, margi
 local frame = 1
 local spin = vim.uv.new_timer()
 local function spinner(m)
-  local SPINNER = code.SPINNER
-  if m[3] == 'VellumSpinner' then return { { SPINNER[frame], m[3] } } end
-  if m[3] == 'VellumBadge' then return { { ' ' .. SPINNER[frame], m[3] } } end
+  if m[3] == 'VellumSpinner' then return { { code.SPINNER[frame], m[3] } } end
+  if m[3] == 'VellumBadge' then return { { ' ' .. code.SPINNER[frame], m[3] } } end
 end
 
 -- Highlights are applied only to lines being drawn, so a redraw costs the

@@ -65,7 +65,7 @@ function M.start()
   if not vim.uv.fs_stat(root .. '/node_modules') then return 'renderer not built: run :Vellum build' end
   vim.fn.mkdir(dir, 'p')
   local partial, stderr, answered = '', '', false
-  local ok, proc
+  local ok, proc -- declared first: the exit callback compares it with job
   ok, proc = pcall(vim.system, { 'node', root .. '/browser.mjs' }, {
     -- puppeteer reads its config (.puppeteerrc.*) from the working directory:
     -- render/.puppeteerrc.cjs applies (Nix names its browser there), a user's project one does not

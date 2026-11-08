@@ -36,9 +36,9 @@ prune()
 local send -- below; a restarted renderer resends through it
 
 -- Chrome holds 100-200 MB, so it runs only while there is work: it stops
--- after a minute with nothing to render, and the next uncached picture
--- starts it again (~0.6 s).
-M.idle_ms = 60000
+-- after five minutes with nothing to render, and the next uncached picture
+-- starts it again (~0.6 s). Five minutes: pauses while editing stay warm.
+M.idle_ms = 300000
 local idle = vim.uv.new_timer()
 
 local function stop()
@@ -125,11 +125,12 @@ function send(out, req)
   local err = M.start()
   if err then return err end
   pending[out] = req
+  req.since = req.since or vim.uv.now()
   req.out = out
   job:write(vim.json.encode(req) .. '\n')
 end
 
--- 'ready', path, { w, h, density } | 'error', message | 'pending'
+-- 'ready', path, { w, h, density } | 'error', message | 'pending', ms since sent
 -- density is PNG pixels per CSS px.
 local function request(key, payload)
   if M.max_pixels then
@@ -154,7 +155,7 @@ local function request(key, payload)
   end
   wanted[out] = true
   M.waiting = M.waiting + 1
-  return 'pending'
+  return 'pending', vim.uv.now() - pending[out].since
 end
 
 -- Cancel queued renders the last draw did not ask for. Typing inside a

@@ -516,9 +516,14 @@ end
 do
   local browser, code = require('vellum.browser'), require('vellum.code')
   local diagram, supported, tgc = browser.diagram, image.supported, vim.o.termguicolors
-  browser.diagram = function() return 'pending' end
   image.supported, vim.o.termguicolors = true, true
   code.reset()
+  -- a fast render shows no loader, and the preview is told when one is due
+  browser.diagram = function() return 'pending', 100 end
+  local quick = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
+  check('fast new diagram has no spinner', quick[1][2][2] == 'VellumCodeLabel' and code.wake == 300, vim.inspect(quick[1]) .. ' ' .. tostring(code.wake))
+  code.wake = nil
+  browser.diagram = function() return 'pending', 5000 end
   local out = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
   local head = out[1]
   local text = table.concat(vim.tbl_map(function(s) return s[1] end, head))
@@ -531,7 +536,10 @@ do
   write_png(file, 400, 100)
   browser.diagram = function() return 'ready', file, { 400, 100, 1 } end
   local ready = code.diagram('graph LR; A --> B', 40, 99, 'mermaid')
-  browser.diagram = function() return 'pending' end
+  browser.diagram = function() return 'pending', 200 end
+  check('fast edit keeps the picture without a badge', code.diagram('graph LR; A --> C', 40, 99, 'mermaid') == ready and code.wake == 800)
+  code.wake = nil
+  browser.diagram = function() return 'pending', 5000 end
   local updating = code.diagram('graph LR; A --> C', 40, 99, 'mermaid')
   browser.diagram, image.supported, vim.o.termguicolors = diagram, supported, tgc
   local seg, ph = updating[1][2], image.placeholder

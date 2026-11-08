@@ -12,6 +12,18 @@ local M = {}
 
 local last_diagram = {} -- source row → last ready diagram, shown while an edit re-renders
 
+-- A loader that flashes for a fast render looks worse than none, so it shows
+-- only once the wait is noticeable. M.wake: ms until the next one is due, for
+-- the preview to draw again then (init.lua); nil when none is.
+local SPINNER_AFTER, BADGE_AFTER = 400, 1000
+M.wake = nil
+
+local function due(elapsed, after)
+  if elapsed >= after then return true end
+  M.wake = math.min(M.wake or math.huge, after - elapsed)
+  return false
+end
+
 function M.reset() last_diagram = {} end
 
 -- Syntax highlight ranges per 0-based row: { { start, end, group }, ... }.
@@ -87,10 +99,12 @@ function M.diagram(code, width, row, lang)
   end
   local last = last_diagram[row]
   if not last then
+    if not due(a, SPINNER_AFTER) then return M.panel(code, lang, width) end
     local out = M.panel(code, lang, width, '⠋ rendering…')
     out[1][2][2] = 'VellumSpinner' -- the preview turns its first glyph (init.lua)
     return out
   end
+  if not due(a, BADGE_AFTER) then return last end
   -- the old picture stays while an edit renders, with an 'updating' badge over
   -- its top-right cells. Only trailing cells may be covered: kitty places each
   -- bare cell after the first by counting from the cell before it.

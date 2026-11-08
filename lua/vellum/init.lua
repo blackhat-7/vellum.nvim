@@ -7,6 +7,7 @@ local browser = require('vellum.browser')
 local zoom = require('vellum.zoom')
 local links = require('vellum.links')
 local mdx = require('vellum.mdx')
+local code = require('vellum.code')
 
 local api = vim.api
 local M = {}
@@ -25,6 +26,7 @@ local S = {} -- win, buf: the preview · src: the markdown buffer · rows, margi
 local SPINNER = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
 local frame = 1
 local spin = vim.uv.new_timer()
+local wake = vim.uv.new_timer() -- draws again when a slow render's loader is due
 
 -- The spinner text over mark m: the first glyph of a 'rendering' label, or
 -- a badge over the cells of a picture being updated (4 bytes per cell).
@@ -130,6 +132,8 @@ local function tabkeys(buf)
   end
 end
 
+local update -- below: draw schedules it when a loader is due
+
 local function draw()
   if not valid() then return end
   local lines, shown
@@ -140,6 +144,10 @@ local function draw()
   api.nvim_buf_set_lines(S.buf, 0, -1, false, lines)
   vim.bo[S.buf].modifiable = false
   sync(true)
+  if code.wake then
+    wake:start(code.wake, 0, vim.schedule_wrap(update))
+    code.wake = nil
+  end
   if browser.busy() and not spin:is_active() then
     spin:start(100, 100, vim.schedule_wrap(function()
       if not valid() or not browser.busy() then return spin:stop() end
@@ -151,7 +159,7 @@ end
 
 -- Coalesce bursts of events into one draw on the next tick.
 local queued = false
-local function update()
+function update()
   if queued then return end
   queued = true
   vim.schedule(function()
@@ -322,6 +330,7 @@ function M.close()
   settle:stop()
   replace:stop()
   spin:stop()
+  wake:stop()
   for _, buf in ipairs({ S.buf, S.src }) do
     if buf and api.nvim_buf_is_valid(buf) then
       for key in pairs(TAB_KEYS) do

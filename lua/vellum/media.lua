@@ -44,9 +44,19 @@ local function load(src)
   if not image.supported or image.problem() then return nil end
   local remote, version = src:match('^https?://'), os.date('%F') -- remote images refresh daily
   if not remote then
+    -- file:// URIs (percent-encoded, as img-clip writes them) are local paths
+    if src:match('^file://') then src = vim.uri_to_fname(src) end
     if src:match('^%a[%w+.-]*:') then return nil end
-    src = vim.fs.normalize(src:sub(1, 1) == '/' and src or M.dir .. '/' .. src)
+    local function path(p) return vim.fs.normalize(p:sub(1, 1) == '/' and p or M.dir .. '/' .. p) end
+    local raw = src
+    src = path(raw)
     local stat = vim.uv.fs_stat(src)
+    -- link destinations are URLs, so `img%20dir/a.png` means `img dir/a.png`; tried
+    -- second, so a file literally named with a %XX in it is still found
+    if not stat and raw:find('%%%x%x') then
+      src = path(vim.uri_decode(raw))
+      stat = vim.uv.fs_stat(src)
+    end
     if not stat or stat.type ~= 'file' then return nil end
     if src:lower():match('%.png$') then
       local pw, ph = image.png_size(src)

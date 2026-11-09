@@ -449,6 +449,15 @@ do
   image.grid(zoom_id, dir .. '/wide.png', 4, 2, 0, 0, 2, 4)
   image.keep(shown_by('![s](' .. dir .. '/small.png)'))
   check('an image no longer shown is freed; shown and zoom ones stay', dropped[wide] and not dropped[small_id] and not dropped[zoom_id], vim.inspect(dropped))
+  -- file:// URIs and percent-encoded paths are local files (img-clip writes
+  -- file:///home/me/my%20shot.png); a name with a literal %20 still loads
+  png('my shot.png', 200, 100)
+  png('lit%20name.png', 200, 100)
+  local spaced, literal = image.id(dir .. '/my shot.png'), image.id(dir .. '/lit%20name.png')
+  check('file:// image', shown_by('![s](file://' .. dir .. '/small.png)')[small_id])
+  check('percent-encoded file:// image', shown_by('![s](' .. vim.uri_from_fname(dir .. '/my shot.png') .. ')')[spaced])
+  check('percent-encoded path', shown_by('![s](' .. dir .. '/my%20shot.png)')[spaced])
+  check('literal %20 in a file name', shown_by('![s](' .. dir .. '/lit%20name.png)')[literal])
   -- images are sent when first drawn, within a budget: drawing a third
   -- 64 MB image frees the least recently drawn one that is off screen
   dropped = {}
